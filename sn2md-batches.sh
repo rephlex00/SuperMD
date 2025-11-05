@@ -36,6 +36,7 @@ typeset TOTAL_JOBS=0
 
 typeset C_RESET="" C_DIM="" C_BOLD="" C_GREEN="" C_YELLOW="" C_RED="" C_BLUE="" C_CYAN=""
 
+# usage: show CLI options and exit when requested
 usage() {
   cat <<'USAGE'
 Usage: sn2md-batches.sh [options] [-- passthrough sn2md args]
@@ -51,21 +52,25 @@ All additional arguments are forwarded to sn2md when a job has no TOML config.
 USAGE
 }
 
+# log_error: print an error message in red to stderr
 log_error() {
   local msg="$1"
   print -u2 "${C_RED}error:${C_RESET} $msg"
 }
 
+# log_warn: emit non-fatal warnings in yellow
 log_warn() {
   local msg="$1"
   print -u2 "${C_YELLOW}warning:${C_RESET} $msg"
 }
 
+# log_info: emit dimmed informational messages
 log_info() {
   local msg="$1"
   print "${C_DIM}$msg${C_RESET}"
 }
 
+# die: print an error and terminate with an optional status code
 die() {
   local msg="$1"
   local code="${2:-1}"
@@ -73,9 +78,12 @@ die() {
   exit "$code"
 }
 
+# trim: remove leading/trailing whitespace
 trim() { sed -E 's/^[[:space:]]+|[[:space:]]+$//g' <<<"$1"; }
+# tilde_expand: convert leading ~ into $HOME
 tilde_expand() { [[ "$1" == "~"* ]] && echo "${1/#\~/$HOME}" || echo "$1"; }
 
+# init_colors: compute ANSI color codes when TTY supports them
 init_colors() {
   if $COLOR && [[ -t 1 ]] && command -v tput >/dev/null 2>&1; then
     C_RESET="$(tput sgr0)"
@@ -89,6 +97,7 @@ init_colors() {
   fi
 }
 
+# parse_args: handle CLI flags, enforcing --setup exclusivity
 parse_args() {
   HAS_NON_SETUP_ARGS=false
   USER_ARGS=()
@@ -152,6 +161,7 @@ parse_args() {
   fi
 }
 
+# require_command: ensure a dependency is available or abort
 require_command() {
   local cmd="$1"
   local hint="$2"
@@ -163,6 +173,7 @@ require_command() {
   fi
 }
 
+# discover_sn2md: locate the sn2md executable from env, .venv, or PATH
 discover_sn2md() {
   local resolved
   if [[ -n "$SN2MD_CMD" ]]; then
@@ -189,6 +200,7 @@ discover_sn2md() {
   SN2MD_CMD=""
 }
 
+# bootstrap_sn2md: create the uv-managed venv and install sn2md + llm-ollama
 bootstrap_sn2md() {
   local uv_bin="${UV_BIN:-}"
   local venv_path="$DEFAULT_VENV"
@@ -221,6 +233,7 @@ DEF_PROGRESS=""
 DEF_LEVEL=""
 DEF_MODEL=""
 
+# load_defaults: read shared defaults from the YAML config
 load_defaults() {
   [[ -r "$CONF_FILE" ]] || die "Config not readable: $CONF_FILE" 66
   DEF_INPUT="$(yq eval -r '.defaults.input // ""' "$CONF_FILE")"
@@ -237,6 +250,7 @@ load_defaults() {
   done < <(yq eval -r '.defaults.extra_args // [] | .[]' "$CONF_FILE")
 }
 
+# load_jobs: collect all job definitions into the JOBS array
 load_jobs() {
   local total
   total="$(yq eval '.jobs | length' "$CONF_FILE")"
@@ -250,11 +264,13 @@ load_jobs() {
   TOTAL_JOBS="$total"
 }
 
+# list_dry_run_files: enumerate note/image files for dry-run reporting
 list_dry_run_files() {
   local input_path="$1"
   find "$input_path" -maxdepth 3 -type f \( -name '*.note' -o -name '*.spd' -o -name '*.pdf' -o -name '*.png' -o -name '*.jpg' \) -print 2>/dev/null
 }
 
+# emit_dry_run_listing: pretty-print discovered files for dry-run
 emit_dry_run_listing() {
   local input_path="$1"
   if [[ -d "$input_path" ]]; then
@@ -275,6 +291,7 @@ emit_dry_run_listing() {
   fi
 }
 
+# summarise_job: echo the resolved inputs for a single job
 summarise_job() {
   local name="$1" input="$2" output="$3" cfg="$4" model="$5" level="$6" force="$7" progress="$8"
   echo "sn2md job: ${name:-unnamed}"
@@ -295,6 +312,7 @@ summarise_job() {
   fi
 }
 
+# run_job: execute one job with buffered logging
 run_job() {
   local idx="$1" job_json="$2"
   local logf job_status=0
@@ -398,6 +416,7 @@ run_job() {
   return $ret
 }
 
+# run_all_jobs: fan out jobs with bounded parallelism and tally results
 run_all_jobs() {
   typeset -a pids=()
   typeset -A pid_status=()
@@ -434,6 +453,7 @@ run_all_jobs() {
   return "$err"
 }
 
+# main: orchestrate argument parsing, setup, config loading, and job execution
 main() {
   parse_args "$@"
   init_colors
