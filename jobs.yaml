@@ -1,0 +1,29 @@
+# Global defaults used when a job omits a field
+defaults:
+  input: /Volumes/Supernote
+  output: ~/Vault
+  env_file: ~/.env           # optional; sourced if exists
+  flags:
+    force: false             # sn2md --force
+    progress: true           # sn2md --progress / --no-progress
+    level: INFO              # sn2md -l INFO|DEBUG|WARNING|ERROR|CRITICAL
+    model: gpt-4o-mini       # sn2md -m value
+  extra_args: []             # additional args for jobs without a config
+
+jobs:
+  - name: Journal
+    input: /Volumes/Supernote/Journal
+    output: ~/Vault/Journal
+    config: ~/sn2md-configs/journal.toml
+
+  - name: Work
+    input: /Volumes/Supernote/Work
+    output: ~/Vault/Work
+    config: ~/sn2md-configs/work.toml
+    # uses all defaults
+
+  - name: Sketchbook
+    input: /Volumes/Supernote/Sketchbook
+    output: ~/Vault/Sketchbook
+    config: ~/sn2md-configs/sketch.toml
+    env_file: ~/.env-sketch  # example of a per-job credential file
