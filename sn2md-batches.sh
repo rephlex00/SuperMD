@@ -1,120 +1,323 @@
 #!/usr/bin/env zsh
 set -euo pipefail
+setopt nobgnice
 
-# ==========================================
+# ==========================================================
 # sn2md-batches — YAML-driven multi-job runner for sn2md
-#
-# Default config: jobs.yaml      (override with: --config file.yaml)
-# Parallelism:     --jobs N      (default = 1; override to run in parallel)
-# Colors:          auto on TTY   (disable with: --no-color)
-# Extra args:      passed through for configless jobs (e.g., --no-progress)
-# Requires:        yq (Mike Farah) — brew install yq
-# ==========================================
+# ----------------------------------------------------------
+#  * Default config : jobs.yaml (override with --config)
+#  * Parallelism    : --jobs N  (default = 1)
+#  * Dry run        : --dry-run (no filesystem changes)
+#  * Colors         : auto on TTY (disable with --no-color)
+#  * Setup          : --setup (bootstrap .venv with sn2md and exit)
+#  * Extra args     : forwarded to sn2md for configless jobs
+#  * Dependencies   : yq + sn2md (setup handled via uv when requested)
+# ==========================================================
 
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-DEFAULT_CONF="$SCRIPT_DIR/jobs.yaml"
+readonly SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+readonly DEFAULT_CONF="$SCRIPT_DIR/jobs.yaml"
+readonly DEFAULT_VENV="$SCRIPT_DIR/.venv"
+UV_PYTHON_VERSION="${UV_PYTHON_VERSION:-3.11}"
+readonly UV_PYTHON_VERSION
+
 CONF_FILE="$DEFAULT_CONF"
-USER_ARGS=()
-JOBS_LIMIT=""   # set later after parsing
+JOBS_LIMIT=1
 COLOR=true
+DRY_RUN=false
+SETUP=false
+SN2MD_CMD="${SN2MD_EXEC:-}"
+HAS_NON_SETUP_ARGS=false
 
-# ---------- helpers ----------
+typeset -a USER_ARGS=()
+typeset -a DEF_EXTRA_ARGS=()
+typeset -a JOBS=()
+
+typeset TOTAL_JOBS=0
+
+typeset C_RESET="" C_DIM="" C_BOLD="" C_GREEN="" C_YELLOW="" C_RED="" C_BLUE="" C_CYAN=""
+
+usage() {
+  cat <<'USAGE'
+Usage: sn2md-batches.sh [options] [-- passthrough sn2md args]
+
+  --config FILE     YAML config file (default: jobs.yaml)
+  --jobs N          Concurrency (default: 1)
+  --dry-run         Preview commands without running sn2md
+  --no-color        Disable ANSI colors
+  --setup           Bootstrap the local sn2md environment (.venv) and exit
+  --help            Show this help
+
+All additional arguments are forwarded to sn2md when a job has no TOML config.
+USAGE
+}
+
+log_error() {
+  local msg="$1"
+  print -u2 "${C_RED}error:${C_RESET} $msg"
+}
+
+log_warn() {
+  local msg="$1"
+  print -u2 "${C_YELLOW}warning:${C_RESET} $msg"
+}
+
+log_info() {
+  local msg="$1"
+  print "${C_DIM}$msg${C_RESET}"
+}
+
+die() {
+  local msg="$1"
+  local code="${2:-1}"
+  log_error "$msg"
+  exit "$code"
+}
+
 trim() { sed -E 's/^[[:space:]]+|[[:space:]]+$//g' <<<"$1"; }
 tilde_expand() { [[ "$1" == "~"* ]] && echo "${1/#\~/$HOME}" || echo "$1"; }
-is_tty() { [[ -t 1 ]]; }
-# ---------- parse args ----------
-while [[ $# -gt 0 ]]; do
-  case "$1" in
-    --config)
-      shift
-      [[ $# -gt 0 ]] || { print -u2 "--config requires a filename"; exit 64; }
-      CONF_FILE="$1"
-      ;;
-    --config=*) CONF_FILE="${1#*=}" ;;
-    --jobs)
-      shift
-      [[ $# -gt 0 ]] || { print -u2 "--jobs requires a number"; exit 64; }
-      JOBS_LIMIT="$1"
-      ;;
-    --jobs=*) JOBS_LIMIT="${1#*=}" ;;
-    --no-color) COLOR=false ;;
-    *) USER_ARGS+=("$1") ;;
-  esac
-  shift
-done
 
-command -v yq >/dev/null 2>&1 || { print -u2 "yq not installed. Try: brew install yq"; exit 127; }
-[[ -r "$CONF_FILE" ]] || { print -u2 "Config not readable: $CONF_FILE"; exit 66; }
+init_colors() {
+  if $COLOR && [[ -t 1 ]] && command -v tput >/dev/null 2>&1; then
+    C_RESET="$(tput sgr0)"
+    C_DIM="$(tput dim)"
+    C_BOLD="$(tput bold)"
+    C_GREEN="$(tput setaf 2)"
+    C_YELLOW="$(tput setaf 3)"
+    C_RED="$(tput setaf 1)"
+    C_BLUE="$(tput setaf 4)"
+    C_CYAN="$(tput setaf 6)"
+  fi
+}
 
-# ---------- colors ----------
-if $COLOR && is_tty && command -v tput >/dev/null 2>&1; then
-  C_RESET="$(tput sgr0)"
-  C_DIM="$(tput dim)"
-  C_BOLD="$(tput bold)"
-  C_GREEN="$(tput setaf 2)"
-  C_YELLOW="$(tput setaf 3)"
-  C_RED="$(tput setaf 1)"
-  C_BLUE="$(tput setaf 4)"
-  C_CYAN="$(tput setaf 6)"
-else
-  C_RESET=""; C_DIM=""; C_BOLD=""; C_GREEN=""; C_YELLOW=""; C_RED=""; C_BLUE=""; C_CYAN="";
-fi
+parse_args() {
+  HAS_NON_SETUP_ARGS=false
+  USER_ARGS=()
 
-# ---------- defaults from YAML ----------
-DEF_INPUT="$(yq -r '.defaults.input // ""' "$CONF_FILE")"
-DEF_OUTPUT="$(yq -r '.defaults.output // ""' "$CONF_FILE")"
-DEF_ENV_FILE="$(yq -r '.defaults.env_file // ""' "$CONF_FILE")"
-DEF_FORCE="$(yq -r '.defaults.flags.force // false' "$CONF_FILE")"
-DEF_PROGRESS="$(yq -r '.defaults.flags.progress // true' "$CONF_FILE")"
-DEF_LEVEL="$(yq -r '.defaults.flags.level // "INFO"' "$CONF_FILE")"
-DEF_MODEL="$(yq -r '.defaults.flags.model // "gpt-4o-mini"' "$CONF_FILE")"
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --config)
+        shift
+        [[ $# -gt 0 ]] || die "--config requires a filename" 64
+        CONF_FILE="$1"
+        HAS_NON_SETUP_ARGS=true
+        ;;
+      --config=*)
+        CONF_FILE="${1#*=}"
+        HAS_NON_SETUP_ARGS=true
+        ;;
+      --jobs)
+        shift
+        [[ $# -gt 0 ]] || die "--jobs requires a number" 64
+        JOBS_LIMIT="$1"
+        HAS_NON_SETUP_ARGS=true
+        ;;
+      --jobs=*)
+        JOBS_LIMIT="${1#*=}"
+        HAS_NON_SETUP_ARGS=true
+        ;;
+      --no-color)
+        COLOR=false
+        HAS_NON_SETUP_ARGS=true
+        ;;
+      --dry-run)
+        DRY_RUN=true
+        HAS_NON_SETUP_ARGS=true
+        ;;
+      --setup)
+        SETUP=true
+        ;;
+      -h|--help)
+        usage
+        exit 0
+        ;;
+      --)
+        shift
+        (( $# > 0 )) && HAS_NON_SETUP_ARGS=true
+        USER_ARGS+=("$@")
+        break
+        ;;
+      *)
+        USER_ARGS+=("$1")
+        HAS_NON_SETUP_ARGS=true
+        ;;
+    esac
+    shift || true
+  done
 
-DEF_EXTRA_ARGS=()
-while IFS= read -r arg; do
-  [[ -n "$arg" ]] && DEF_EXTRA_ARGS+=("$arg")
-done < <(yq -r '.defaults.extra_args[]? // empty' "$CONF_FILE")
+  [[ "$JOBS_LIMIT" =~ ^[0-9]+$ ]] || die "--jobs must be an integer" 64
+  (( JOBS_LIMIT >= 1 )) || die "--jobs must be >= 1" 64
 
-# ---------- load jobs as JSON lines ----------
-mapfile -t JOBS < <(yq -c '.jobs[]' "$CONF_FILE")
-TOTAL="${#JOBS[@]}"
-(( TOTAL > 0 )) || { print -u2 "No jobs found in $CONF_FILE"; exit 64; }
+  if $SETUP && ( $HAS_NON_SETUP_ARGS || (( ${#USER_ARGS[@]} > 0 )) ); then
+    die "--setup must be used by itself (no additional flags or arguments)" 64
+  fi
+}
 
-# ---------- decide concurrency ----------
-if [[ -z "$JOBS_LIMIT" ]]; then
-  JOBS_LIMIT=1
-fi
-[[ "$JOBS_LIMIT" =~ ^[0-9]+$ ]] || { print -u2 "--jobs must be an integer"; exit 64; }
-(( JOBS_LIMIT >= 1 )) || { print -u2 "--jobs must be >= 1"; exit 64; }
+require_command() {
+  local cmd="$1"
+  local hint="$2"
+  if ! command -v "$cmd" >/dev/null 2>&1; then
+    if [[ -n "$hint" ]]; then
+      die "$cmd not found. $hint" 127
+    fi
+    die "$cmd not found" 127
+  fi
+}
 
-print "${C_BOLD}${C_BLUE}sn2md-batches:${C_RESET} jobs=$TOTAL  parallel=$JOBS_LIMIT  config=$CONF_FILE"
+discover_sn2md() {
+  local resolved
+  if [[ -n "$SN2MD_CMD" ]]; then
+    if [[ -x "$SN2MD_CMD" ]]; then
+      return
+    elif resolved="$(command -v "$SN2MD_CMD" 2>/dev/null || true)" && [[ -n "$resolved" ]]; then
+      SN2MD_CMD="$resolved"
+      return
+    else
+      die "SN2MD_EXEC points to a non-existent command: $SN2MD_CMD" 127
+    fi
+  fi
 
-# ---------- run a single job in background (buffered output) ----------
-# We buffer each job's log in a temp file to avoid interleaved lines.
+  if [[ -x "$DEFAULT_VENV/bin/sn2md" ]]; then
+    SN2MD_CMD="$DEFAULT_VENV/bin/sn2md"
+    return
+  fi
+
+  if command -v sn2md >/dev/null 2>&1; then
+    SN2MD_CMD="$(command -v sn2md)"
+    return
+  fi
+
+  SN2MD_CMD=""
+}
+
+bootstrap_sn2md() {
+  local uv_bin="${UV_BIN:-}"
+  local venv_path="$DEFAULT_VENV"
+
+  [[ -n "$uv_bin" ]] || uv_bin="$(command -v uv 2>/dev/null || true)"
+  [[ -n "$uv_bin" ]] || die "uv not found. Install it from https://astral.sh/uv or set UV_BIN=/path/to/uv."
+
+  log_info "Bootstrapping sn2md with uv (python ${UV_PYTHON_VERSION})…"
+
+  if [[ ! -d "$venv_path" ]]; then
+    "$uv_bin" venv --python "$UV_PYTHON_VERSION" "$venv_path" || die "uv venv failed"
+  fi
+
+  if [[ ! -x "$venv_path/bin/sn2md" ]]; then
+    "$uv_bin" pip install --python "$venv_path/bin/python" sn2md || die "uv pip install sn2md failed"
+  fi
+
+  if ! "$uv_bin" pip install --python "$venv_path/bin/python" llm-ollama >/dev/null 2>&1; then
+    log_warn "llm-ollama plugin installation failed; retry with UV_BIN pointing at uv if installed elsewhere"
+  fi
+
+  SN2MD_CMD="$venv_path/bin/sn2md"
+}
+
+DEF_INPUT=""
+DEF_OUTPUT=""
+DEF_ENV_FILE=""
+DEF_FORCE=""
+DEF_PROGRESS=""
+DEF_LEVEL=""
+DEF_MODEL=""
+
+load_defaults() {
+  [[ -r "$CONF_FILE" ]] || die "Config not readable: $CONF_FILE" 66
+  DEF_INPUT="$(yq eval -r '.defaults.input // ""' "$CONF_FILE")"
+  DEF_OUTPUT="$(yq eval -r '.defaults.output // ""' "$CONF_FILE")"
+  DEF_ENV_FILE="$(yq eval -r '.defaults.env_file // ""' "$CONF_FILE")"
+  DEF_FORCE="$(yq eval -r '.defaults.flags.force // false' "$CONF_FILE")"
+  DEF_PROGRESS="$(yq eval -r '.defaults.flags.progress // true' "$CONF_FILE")"
+  DEF_LEVEL="$(yq eval -r '.defaults.flags.level // "INFO"' "$CONF_FILE")"
+  DEF_MODEL="$(yq eval -r '.defaults.flags.model // "gpt-4o-mini"' "$CONF_FILE")"
+
+  DEF_EXTRA_ARGS=()
+  while IFS= read -r arg; do
+    [[ -n "$arg" ]] && DEF_EXTRA_ARGS+=("$arg")
+  done < <(yq eval -r '.defaults.extra_args // [] | .[]' "$CONF_FILE")
+}
+
+load_jobs() {
+  local total
+  total="$(yq eval '.jobs | length' "$CONF_FILE")"
+  total="${total:-0}"
+  (( total > 0 )) || die "No jobs found in $CONF_FILE" 64
+
+  JOBS=()
+  for (( idx=0; idx<total; idx+=1 )); do
+    JOBS+=("$(yq eval -o=json -I=0 ".jobs[$idx]" "$CONF_FILE")")
+  done
+  TOTAL_JOBS="$total"
+}
+
+list_dry_run_files() {
+  local input_path="$1"
+  find "$input_path" -maxdepth 3 -type f \( -name '*.note' -o -name '*.spd' -o -name '*.pdf' -o -name '*.png' -o -name '*.jpg' \) -print 2>/dev/null
+}
+
+emit_dry_run_listing() {
+  local input_path="$1"
+  if [[ -d "$input_path" ]]; then
+    echo "[dry-run] Input directory contains:"
+    local -a dry_files=()
+    while IFS= read -r file; do
+      dry_files+=("$file")
+    done < <(list_dry_run_files "$input_path")
+    if (( ${#dry_files[@]} == 0 )); then
+      echo "    (no note/image files discovered)"
+    else
+      for file in "${dry_files[@]}"; do
+        echo "    - $file"
+      done
+    fi
+  else
+    echo "[dry-run] Input file: $input_path"
+  fi
+}
+
+summarise_job() {
+  local name="$1" input="$2" output="$3" cfg="$4" model="$5" level="$6" force="$7" progress="$8"
+  echo "sn2md job: ${name:-unnamed}"
+  echo "  input : $input"
+  echo "  output: $output"
+  if [[ -n "$cfg" && "$cfg" != "null" ]]; then
+    echo "  config: $cfg"
+    echo "  model : (from config)"
+    echo "  level : (from config)"
+    echo "  force : (from config)"
+    echo "  progress: (from config)"
+  else
+    echo "  config: (none)"
+    echo "  model : $model"
+    echo "  level : $level"
+    echo "  force : $force"
+    echo "  progress: $progress"
+  fi
+}
+
 run_job() {
-  local idx="$1" job_json="$2" logf ret
+  local idx="$1" job_json="$2"
+  local logf job_status=0
   logf="$(mktemp -t sn2md_job_${idx}.XXXXXX)"
 
   {
     local name in_path out_path cfg_path env_file_job force progress level model
-    name="$(yq -r '.name // ""' <<<"$job_json")"
-    in_path="$(yq -r '.input' <<<"$job_json")"
-    out_path="$(yq -r '.output // ""' <<<"$job_json")"
-    cfg_path="$(yq -r '.config' <<<"$job_json")"
-    env_file_job="$(yq -r '.env_file // ""' <<<"$job_json")"
+    name="$(yq eval -r '.name // ""' - <<<"$job_json")"
+    in_path="$(yq eval -r '.input // ""' - <<<"$job_json")"
+    out_path="$(yq eval -r '.output // ""' - <<<"$job_json")"
+    cfg_path="$(yq eval -r '.config // ""' - <<<"$job_json")"
+    env_file_job="$(yq eval -r '.env_file // ""' - <<<"$job_json")"
+    force="$(yq eval -r '.flags.force // ""' - <<<"$job_json")"
+    progress="$(yq eval -r '.flags.progress // ""' - <<<"$job_json")"
+    level="$(yq eval -r '.flags.level // ""' - <<<"$job_json")"
+    model="$(yq eval -r '.flags.model // ""' - <<<"$job_json")"
 
-    force="$(yq -r '.flags.force // ""' <<<"$job_json")"
-    progress="$(yq -r '.flags.progress // ""' <<<"$job_json")"
-    level="$(yq -r '.flags.level // ""' <<<"$job_json")"
-    model="$(yq -r '.flags.model // ""' <<<"$job_json")"
-
-    # per-job extra args merged with defaults
     local -a job_extra_args
     job_extra_args=("${DEF_EXTRA_ARGS[@]}")
     while IFS= read -r arg; do
       [[ -n "$arg" ]] && job_extra_args+=("$arg")
-    done < <(yq -r '.extra_args[]? // empty' <<<"$job_json")
+    done < <(yq eval -r '.extra_args // [] | .[]' - <<<"$job_json")
 
-    # defaults
     [[ -z "$in_path" || "$in_path" == "null" ]] && in_path="$DEF_INPUT"
     [[ -z "$out_path" || "$out_path" == "null" ]] && out_path="$DEF_OUTPUT"
     [[ -z "$env_file_job" || "$env_file_job" == "null" ]] && env_file_job="$DEF_ENV_FILE"
@@ -123,135 +326,140 @@ run_job() {
     [[ -z "$level" || "$level" == "null" ]] && level="$DEF_LEVEL"
     [[ -z "$model" || "$model" == "null" ]] && model="$DEF_MODEL"
 
-    # expand & trim
     in_path="$(tilde_expand "$(trim "$in_path")")"
     out_path="$(tilde_expand "$(trim "$out_path")")"
     cfg_path="$(tilde_expand "$(trim "$cfg_path")")"
     env_file_job="$(tilde_expand "$(trim "$env_file_job")")"
 
-    # validate
     if [[ -z "$in_path" ]]; then
       echo "Input missing after defaults (job='${name:-unnamed}')" >&2
-      echo "__RESULT__:FAIL" >>"$logf"
-      return
-    fi
-    if [[ ! -e "$in_path" ]]; then
+      job_status=1
+    elif [[ ! -e "$in_path" ]]; then
       echo "Input path not found: $in_path (job='${name:-unnamed}')" >&2
-      echo "__RESULT__:FAIL" >>"$logf"
-      return
-    fi
-    if [[ -n "$cfg_path" && "$cfg_path" != "null" && ! -r "$cfg_path" ]]; then
+      job_status=1
+    elif [[ -n "$cfg_path" && "$cfg_path" != "null" && ! -r "$cfg_path" ]]; then
       echo "Config not readable: $cfg_path (job='${name:-unnamed}')" >&2
-      echo "__RESULT__:FAIL" >>"$logf"
-      return
-    fi
-    [[ -n "$out_path" ]] || { echo "Output missing after defaults (job='${name:-unnamed}')" >&2; echo "__RESULT__:FAIL" >>"$logf"; return; }
-    mkdir -p "$out_path"
-
-    echo "sn2md job: ${name:-unnamed}"
-    echo "  input : $in_path"
-    echo "  output: $out_path"
-    if [[ -n "$cfg_path" && "$cfg_path" != "null" ]]; then
-      echo "  config: $cfg_path"
+      job_status=1
+    elif [[ -z "$out_path" ]]; then
+      echo "Output missing after defaults (job='${name:-unnamed}')" >&2
+      job_status=1
     else
-      echo "  config: (none)"
-    fi
-    if [[ -n "$cfg_path" && "$cfg_path" != "null" ]]; then
-      echo "  model : (from config)"
-      echo "  level : (from config)"
-      echo "  force : (from config)"
-      echo "  progress: (from config)"
-    else
-      echo "  model : $model"
-      echo "  level : $level"
-      echo "  force : $force"
-      echo "  progress: $progress"
-    fi
-
-    local -a SN_ARGS
-    SN_ARGS=(-o "$out_path")
-    if [[ -n "$cfg_path" && "$cfg_path" != "null" ]]; then
-      SN_ARGS+=(-c "$cfg_path")
-    else
-      SN_ARGS+=(-m "$model" -l "$level")
-      [[ "$force" == "true" ]] && SN_ARGS+=("--force")
-      if [[ "$progress" == "true" ]]; then
-        SN_ARGS+=("--progress")
-      else
-        SN_ARGS+=("--no-progress")
+      if ! $DRY_RUN; then
+        mkdir -p "$out_path"
       fi
-      SN_ARGS+=("${job_extra_args[@]}" "${USER_ARGS[@]}")
-    fi
 
-    # scoped env
-    if [[ -n "$env_file_job" && -r "$env_file_job" ]]; then
-      set -o allexport
-      source "$env_file_job"
-      set +o allexport
-    fi
+      summarise_job "$name" "$in_path" "$out_path" "$cfg_path" "$model" "$level" "$force" "$progress"
 
-    if sn2md "${SN_ARGS[@]}" directory "$in_path"; then
-      echo "__RESULT__:OK" >>"$logf"
-    else
-      echo "__RESULT__:FAIL" >>"$logf"
+      local -a sn_args
+      sn_args=(-o "$out_path")
+      if [[ -n "$cfg_path" && "$cfg_path" != "null" ]]; then
+        sn_args+=(-c "$cfg_path")
+      else
+        sn_args+=(-m "$model" -l "$level")
+        [[ "$force" == "true" ]] && sn_args+=("--force")
+        if [[ "$progress" == "true" ]]; then
+          sn_args+=("--progress")
+        else
+          sn_args+=("--no-progress")
+        fi
+        sn_args+=("${job_extra_args[@]}" "${USER_ARGS[@]}")
+      fi
+
+      if [[ -n "$env_file_job" && -r "$env_file_job" ]]; then
+        set -o allexport
+        source "$env_file_job"
+        set +o allexport
+      fi
+
+      if $DRY_RUN; then
+        echo "[dry-run] Would run: $(printf '%q ' "$SN2MD_CMD" "${sn_args[@]}" directory "$in_path")" | sed 's/[[:space:]]$//'
+        emit_dry_run_listing "$in_path"
+        echo "[dry-run] Output would be written under: $out_path"
+      else
+        if "$SN2MD_CMD" "${sn_args[@]}" directory "$in_path"; then
+          job_status=0
+        else
+          job_status=$?
+        fi
+      fi
     fi
   } >"$logf" 2>&1
 
-  ret=0
-  grep -q "__RESULT__:OK" "$logf" || ret=1
-
-  # pretty print buffered block with color + prefix
+  local ret=$job_status
   local title="${C_BOLD}${C_CYAN}[job $idx]${C_RESET} ${C_BOLD}"
   if (( ret == 0 )); then
     echo "${title}${C_GREEN}SUCCESS${C_RESET}"
   else
     echo "${title}${C_RED}FAILED${C_RESET}"
   fi
-  # strip the __RESULT__ marker line(s) before printing
-  sed '/^__RESULT__:/d' "$logf" | sed "s/^/  /"
+  sed 's/^/  /' "$logf"
 
   rm -f "$logf"
   return $ret
 }
 
-# ---------- run in parallel (bounded) ----------
-typeset -a PIDS
-typeset -A PID_STATUS  # pid -> 0/1
-ok=0 err=0
+run_all_jobs() {
+  typeset -a pids=()
+  typeset -A pid_status=()
+  local ok=0 err=0 idx=0
 
-concurrency="$JOBS_LIMIT"
-index=0
+  for job in "${JOBS[@]}"; do
+    (( ++idx ))
+    ( run_job "$idx" "$job" ) &
+    pids+=("$!")
 
-for job in "${JOBS[@]}"; do
-  (( index++ ))
-
-  # launch background
-  ( run_job "$index" "$job" ) &
-  pid=$!
-  PIDS+=("$pid")
-
-  # throttle
-  while (( ${#PIDS[@]} >= concurrency )); do
-    wait "${PIDS[1]}" && PID_STATUS["${PIDS[1]}"]=0 || PID_STATUS["${PIDS[1]}"]=1
-    PIDS=("${PIDS[@]:1}")
+    while (( ${#pids[@]} >= JOBS_LIMIT )); do
+      wait "${pids[1]}" && pid_status["${pids[1]}"]=0 || pid_status["${pids[1]}"]=1
+      pids=("${pids[@]:1}")
+    done
   done
-done
 
-# wait remaining
-for pid in "${PIDS[@]}"; do
-  wait "$pid" && PID_STATUS["$pid"]=0 || PID_STATUS["$pid"]=1
-done
+  for pid in "${pids[@]}"; do
+    wait "$pid" && pid_status["$pid"]=0 || pid_status["$pid"]=1
+  done
 
-# tally
-for p in "${(@k)PID_STATUS}"; do
-  if (( PID_STATUS[$p] == 0 )); then (( ok++ )); else (( err++ )); fi
-done
+  for p in "${(@k)pid_status}"; do
+    if (( pid_status[$p] == 0 )); then
+      (( ok += 1 ))
+    else
+      (( err += 1 ))
+    fi
+  done
 
-# footer
-if (( err == 0 )); then
-  echo "${C_BOLD}${C_GREEN}All done.${C_RESET} total=$TOTAL ok=$ok err=$err"
-  exit 0
-else
-  echo "${C_BOLD}${C_YELLOW}Completed with errors.${C_RESET} total=$TOTAL ok=$ok err=$err"
-  exit 1
-fi
+  if (( err == 0 )); then
+    echo "${C_BOLD}${C_GREEN}All done.${C_RESET} total=$TOTAL_JOBS ok=$ok err=$err"
+  else
+    echo "${C_BOLD}${C_YELLOW}Completed with errors.${C_RESET} total=$TOTAL_JOBS ok=$ok err=$err"
+  fi
+  return "$err"
+}
+
+main() {
+  parse_args "$@"
+  init_colors
+
+  if $SETUP; then
+    bootstrap_sn2md
+    discover_sn2md
+    if [[ -z "$SN2MD_CMD" ]]; then
+      die "sn2md installation failed; ensure uv is available and retry --setup."
+    fi
+    echo "${C_BOLD}${C_GREEN}sn2md setup complete:${C_RESET} $SN2MD_CMD"
+    exit 0
+  fi
+
+  require_command "yq" "Try: brew install yq"
+
+  discover_sn2md
+  if [[ -z "$SN2MD_CMD" ]]; then
+    die "sn2md command not found. Run ./sn2md-batches.sh --setup or install sn2md and set SN2MD_EXEC."
+  fi
+
+  load_defaults
+  load_jobs
+
+  echo "${C_BOLD}${C_BLUE}sn2md-batches:${C_RESET} jobs=$TOTAL_JOBS parallel=$JOBS_LIMIT config=$CONF_FILE"
+  run_all_jobs
+}
+
+main "$@"
