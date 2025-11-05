@@ -1,0 +1,19 @@
+--- a/supernotelib/decoder.py
++++ b/supernotelib/decoder.py
+@@ -208,10 +208,15 @@
+     def _create_color_bytearray(self, mode, colormap, color_code, length):
+         if mode == color.MODE_RGB:
+             c = colormap.get(color_code)
+-            r, g, b = color.get_rgb(c)
++            if c is None:
++                r, g, b = (color_code, color_code, color_code)
++            else:
++                r, g, b = color.get_rgb(c)
+             return bytearray((r, g, b,)) * length
+         else:
+             c = colormap.get(color_code)
++            if c is None:
++                c = color_code
+             return bytearray((c,)) * length
+ 
+     def _adjust_tail_length(self, tail_length, current_length, total_length):
