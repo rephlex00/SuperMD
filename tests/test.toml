@@ -21,7 +21,7 @@ model = "gemma3:12b"
 # --------------------------------
 
 output_filename_template = "{{file_basename}}.md"
-output_path_template = "{{year_month_day}}/"
+output_path_template = "{{year}}/{{month}}"
 
 # --------------------------------
 # Page → Markdown Conversion
@@ -58,7 +58,7 @@ template = """
 ---
 date: {{year_month_day}}
 type: supernote
-notefile: {{file_basename}}
+notefile: {{file_basename}}.note
 ---
 ## {{file_basename}}
 {{llm_output}}

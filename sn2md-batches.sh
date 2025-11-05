@@ -312,108 +312,112 @@ summarise_job() {
   fi
 }
 
-# run_job: execute one job with buffered logging
+# run_job: execute one job with live logging streamed directly to stdout
 run_job() {
   local idx="$1" job_json="$2"
-  local logf job_status=0
-  logf="$(mktemp -t sn2md_job_${idx}.XXXXXX)"
+  local job_status=0
 
-  {
-    local name in_path out_path cfg_path env_file_job force progress level model
-    name="$(yq eval -r '.name // ""' - <<<"$job_json")"
-    in_path="$(yq eval -r '.input // ""' - <<<"$job_json")"
-    out_path="$(yq eval -r '.output // ""' - <<<"$job_json")"
-    cfg_path="$(yq eval -r '.config // ""' - <<<"$job_json")"
-    env_file_job="$(yq eval -r '.env_file // ""' - <<<"$job_json")"
-    force="$(yq eval -r '.flags.force // ""' - <<<"$job_json")"
-    progress="$(yq eval -r '.flags.progress // ""' - <<<"$job_json")"
-    level="$(yq eval -r '.flags.level // ""' - <<<"$job_json")"
-    model="$(yq eval -r '.flags.model // ""' - <<<"$job_json")"
+  echo "${C_BOLD}${C_CYAN}[job $idx]${C_RESET} ${C_DIM}starting…${C_RESET}"
 
-    local -a job_extra_args
-    job_extra_args=("${DEF_EXTRA_ARGS[@]}")
-    while IFS= read -r arg; do
-      [[ -n "$arg" ]] && job_extra_args+=("$arg")
-    done < <(yq eval -r '.extra_args // [] | .[]' - <<<"$job_json")
+  local name in_path out_path cfg_path env_file_job force progress level model
+  name="$(yq eval -r '.name // ""' - <<<"$job_json")"
+  in_path="$(yq eval -r '.input // ""' - <<<"$job_json")"
+  out_path="$(yq eval -r '.output // ""' - <<<"$job_json")"
+  cfg_path="$(yq eval -r '.config // ""' - <<<"$job_json")"
+  env_file_job="$(yq eval -r '.env_file // ""' - <<<"$job_json")"
+  force="$(yq eval -r '.flags.force // ""' - <<<"$job_json")"
+  progress="$(yq eval -r '.flags.progress // ""' - <<<"$job_json")"
+  level="$(yq eval -r '.flags.level // ""' - <<<"$job_json")"
+  model="$(yq eval -r '.flags.model // ""' - <<<"$job_json")"
 
-    [[ -z "$in_path" || "$in_path" == "null" ]] && in_path="$DEF_INPUT"
-    [[ -z "$out_path" || "$out_path" == "null" ]] && out_path="$DEF_OUTPUT"
-    [[ -z "$env_file_job" || "$env_file_job" == "null" ]] && env_file_job="$DEF_ENV_FILE"
-    [[ -z "$force" || "$force" == "null" ]] && force="$DEF_FORCE"
-    [[ -z "$progress" || "$progress" == "null" ]] && progress="$DEF_PROGRESS"
-    [[ -z "$level" || "$level" == "null" ]] && level="$DEF_LEVEL"
-    [[ -z "$model" || "$model" == "null" ]] && model="$DEF_MODEL"
+  local -a job_extra_args
+  job_extra_args=("${DEF_EXTRA_ARGS[@]}")
+  while IFS= read -r arg; do
+    [[ -n "$arg" ]] && job_extra_args+=("$arg")
+  done < <(yq eval -r '.extra_args // [] | .[]' - <<<"$job_json")
 
-    in_path="$(tilde_expand "$(trim "$in_path")")"
-    out_path="$(tilde_expand "$(trim "$out_path")")"
-    cfg_path="$(tilde_expand "$(trim "$cfg_path")")"
-    env_file_job="$(tilde_expand "$(trim "$env_file_job")")"
+  [[ -z "$in_path" || "$in_path" == "null" ]] && in_path="$DEF_INPUT"
+  [[ -z "$out_path" || "$out_path" == "null" ]] && out_path="$DEF_OUTPUT"
+  [[ -z "$env_file_job" || "$env_file_job" == "null" ]] && env_file_job="$DEF_ENV_FILE"
+  [[ -z "$force" || "$force" == "null" ]] && force="$DEF_FORCE"
+  [[ -z "$progress" || "$progress" == "null" ]] && progress="$DEF_PROGRESS"
+  [[ -z "$level" || "$level" == "null" ]] && level="$DEF_LEVEL"
+  [[ -z "$model" || "$model" == "null" ]] && model="$DEF_MODEL"
 
-    if [[ -z "$in_path" ]]; then
-      echo "Input missing after defaults (job='${name:-unnamed}')" >&2
-      job_status=1
-    elif [[ ! -e "$in_path" ]]; then
-      echo "Input path not found: $in_path (job='${name:-unnamed}')" >&2
-      job_status=1
-    elif [[ -n "$cfg_path" && "$cfg_path" != "null" && ! -r "$cfg_path" ]]; then
-      echo "Config not readable: $cfg_path (job='${name:-unnamed}')" >&2
-      job_status=1
-    elif [[ -z "$out_path" ]]; then
-      echo "Output missing after defaults (job='${name:-unnamed}')" >&2
-      job_status=1
+  in_path="$(tilde_expand "$(trim "$in_path")")"
+  out_path="$(tilde_expand "$(trim "$out_path")")"
+  cfg_path="$(tilde_expand "$(trim "$cfg_path")")"
+  env_file_job="$(tilde_expand "$(trim "$env_file_job")")"
+
+  if [[ -z "$in_path" ]]; then
+    echo "Input missing after defaults (job='${name:-unnamed}')" >&2
+    job_status=1
+  elif [[ ! -e "$in_path" ]]; then
+    echo "Input path not found: $in_path (job='${name:-unnamed}')" >&2
+    job_status=1
+  elif [[ -n "$cfg_path" && "$cfg_path" != "null" && ! -r "$cfg_path" ]]; then
+    echo "Config not readable: $cfg_path (job='${name:-unnamed}')" >&2
+    job_status=1
+  elif [[ -z "$out_path" ]]; then
+    echo "Output missing after defaults (job='${name:-unnamed}')" >&2
+    job_status=1
+  fi
+
+  if (( job_status == 0 )); then
+    if ! $DRY_RUN; then
+      mkdir -p "$out_path"
+    fi
+
+    while IFS= read -r line; do
+      echo "$line"
+    done < <(summarise_job "$name" "$in_path" "$out_path" "$cfg_path" "$model" "$level" "$force" "$progress")
+
+    local -a sn_args
+    sn_args=(-o "$out_path")
+    if [[ -n "$cfg_path" && "$cfg_path" != "null" ]]; then
+      sn_args+=(-c "$cfg_path")
     else
-      if ! $DRY_RUN; then
-        mkdir -p "$out_path"
-      fi
-
-      summarise_job "$name" "$in_path" "$out_path" "$cfg_path" "$model" "$level" "$force" "$progress"
-
-      local -a sn_args
-      sn_args=(-o "$out_path")
-      if [[ -n "$cfg_path" && "$cfg_path" != "null" ]]; then
-        sn_args+=(-c "$cfg_path")
+      sn_args+=(-m "$model" -l "$level")
+      [[ "$force" == "true" ]] && sn_args+=("--force")
+      if [[ "$progress" == "true" ]]; then
+        sn_args+=("--progress")
       else
-        sn_args+=(-m "$model" -l "$level")
-        [[ "$force" == "true" ]] && sn_args+=("--force")
-        if [[ "$progress" == "true" ]]; then
-          sn_args+=("--progress")
-        else
-          sn_args+=("--no-progress")
-        fi
-        sn_args+=("${job_extra_args[@]}" "${USER_ARGS[@]}")
+        sn_args+=("--no-progress")
       fi
+      sn_args+=("${job_extra_args[@]}" "${USER_ARGS[@]}")
+    fi
 
-      if [[ -n "$env_file_job" && -r "$env_file_job" ]]; then
-        set -o allexport
-        source "$env_file_job"
-        set +o allexport
-      fi
+    if [[ -n "$env_file_job" && -r "$env_file_job" ]]; then
+      set -o allexport
+      source "$env_file_job"
+      set +o allexport
+    fi
 
-      if $DRY_RUN; then
-        echo "[dry-run] Would run: $(printf '%q ' "$SN2MD_CMD" "${sn_args[@]}" directory "$in_path")" | sed 's/[[:space:]]$//'
-        emit_dry_run_listing "$in_path"
-        echo "[dry-run] Output would be written under: $out_path"
+    if $DRY_RUN; then
+      local preview
+      preview="$(printf '%q ' "$SN2MD_CMD" "${sn_args[@]}" directory "$in_path")"
+      preview="${preview% }"
+      echo "[dry-run] Would run: $preview"
+      while IFS= read -r line; do
+        echo "$line"
+      done < <(emit_dry_run_listing "$in_path")
+      echo "[dry-run] Output would be written under: $out_path"
+    else
+      if "$SN2MD_CMD" "${sn_args[@]}" directory "$in_path"; then
+        job_status=0
       else
-        if "$SN2MD_CMD" "${sn_args[@]}" directory "$in_path"; then
-          job_status=0
-        else
-          job_status=$?
-        fi
+        job_status=$?
       fi
     fi
-  } >"$logf" 2>&1
-
-  local ret=$job_status
-  local title="${C_BOLD}${C_CYAN}[job $idx]${C_RESET} ${C_BOLD}"
-  if (( ret == 0 )); then
-    echo "${title}${C_GREEN}SUCCESS${C_RESET}"
-  else
-    echo "${title}${C_RED}FAILED${C_RESET}"
   fi
-  sed 's/^/  /' "$logf"
 
-  rm -f "$logf"
-  return $ret
+  if (( job_status == 0 )); then
+    echo "${C_BOLD}${C_CYAN}[job $idx]${C_RESET} ${C_GREEN}SUCCESS${C_RESET}"
+  else
+    echo "${C_BOLD}${C_CYAN}[job $idx]${C_RESET} ${C_RED}FAILED${C_RESET}"
+  fi
+
+  return "$job_status"
 }
 
 # run_all_jobs: fan out jobs with bounded parallelism and tally results
