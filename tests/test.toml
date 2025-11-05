@@ -4,7 +4,7 @@
 # ===============================
 
 # Use the small, fast, cheap model that works well for SN pages.
-model = "gpt-4o-mini"
+model = "gemma3:12b"
 
 
 # --------------------------------
@@ -67,18 +67,4 @@ notefile: {{file_basename}}
 {% for image in images %}
 ![{{ image.name }}]({{image.name}})
 {%- endfor %}
-
-{% if keywords %}
-# Keywords
-{% for keyword in keywords %}
-- Page {{ keyword.page_number }}: {{ keyword.content }}
-{%- endfor %}
-{%- endif %}
-
-{% if titles %}
-# Titles
-{% for title in titles %}
-- Page {{ title.page_number }}: Level {{ title.level }} "{{ title.content }}"
-{%- endfor %}
-{%- endif %}
 """
