@@ -45,7 +45,13 @@ After setup, the `sn2md` binary in `.venv/bin/sn2md` is used automatically. To p
    ./sn2md-batches.sh --setup
    ```
 
-4. Preview the run without touching the filesystem:
+4. Apply the local sn2md patches so the CLI supports per-note metadata and `.image/` media folders:
+
+   ```bash
+   zsh patch.sh
+   ```
+
+5. Preview the run without touching the filesystem:
 
    ```bash
    ./sn2md-batches.sh --dry-run --config jobs.yaml
@@ -53,7 +59,7 @@ After setup, the `sn2md` binary in `.venv/bin/sn2md` is used automatically. To p
 
    Dry run prints the exact `sn2md` command per job and lists any note/image files discovered under each input directory.
 
-5. Execute the conversions (serial by default). Remove `--dry-run` once satisfied:
+6. Execute the conversions (serial by default). Remove `--dry-run` once satisfied:
 
    ```bash
    ./sn2md-batches.sh --config jobs.yaml
@@ -66,6 +72,7 @@ After setup, the `sn2md` binary in `.venv/bin/sn2md` is used automatically. To p
 - Jobs that specify a TOML `config` only receive `-o` and `-c`; move per-job tuning into the TOML file.
 - Jobs without a config inherit any `flags.*` or `extra_args` defined in YAML (plus CLI arguments that follow the script-level switches).
 - Per-job `env_file` values let you inject different credential sets before each `sn2md` invocation.
+- The patched `sn2md` writes note assets under `note/output/.image/` and per-note metadata under `note/output/.meta/` so multiple notes can share a dated folder without conflicts. Reference images using the relative `.image/...` links that the generator emits.
 
 ## Sample Fixtures
 The repository includes:
@@ -77,3 +84,4 @@ The repository includes:
 - Missing `yq` or `sn2md` will stop the script early with a clear error message. Use `--setup` to install sn2md locally or install your own before running jobs.
 - Network errors (e.g., OpenAI connectivity) surface in the job log; rerun the job after connectivity is restored.
 - Use `--dry-run` to verify paths and configs before hitting the network or writing files.
+- If `sn2md` is reinstalled, rerun `zsh patch.sh` so the `.image/` and `.meta/` behaviour is restored before exporting notes.

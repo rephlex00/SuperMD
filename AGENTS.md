@@ -1,7 +1,7 @@
 # sn2md Agents
 
 ## Runner Overview
-- `sn2md-batches.sh` orchestrates multiple `sn2md directory …` runs with isolated logging so job output never interleaves. Use `--setup` (alone) to bootstrap the local `.venv/` with sn2md and `llm-ollama`.
+- `sn2md-batches.sh` orchestrates multiple `sn2md directory …` runs with isolated logging so job output never interleaves. Use `--setup` (alone) to bootstrap the local `.venv/` with sn2md and `llm-ollama`, then `zsh patch.sh` to apply the local sn2md patches.
 - By default it reads `jobs.yaml` from the script directory; override with `--config path/to/jobs.yaml`.
 - Supports `--jobs N` (serial by default), `--dry-run` for a safe preview, and `--no-color`. CLI args that follow those switches flow through only when a job lacks a TOML config.
 - Requires `yq` (Mike Farah) for YAML parsing and `sn2md` (install locally with `--setup` or provide your own).
@@ -10,7 +10,7 @@
 ## Execution Flow
 - Loads shared defaults from YAML once, then captures each job definition as JSON for processing.
 - Determines concurrency from `--jobs`, defaulting to single-threaded execution; uses a bounded worker pool to keep logs per job.
-- Normalises paths (tilde expansion, trimming), validates that required inputs/configs exist, and prepares the output directory (skipped during dry runs).
+- Normalises paths (tilde expansion, trimming), validates that required inputs/configs exist, and prepares the output directory (skipped during dry runs). Patched sn2md runs emit note assets into `.image/` and per-note metadata into `.meta/` within each note’s destination folder.
 - Buffers stdout/stderr for each job, then prints the block when the job completes.
 - Sources `defaults.env_file` or a per-job `env_file` just before invoking `sn2md`, letting each job use different credentials.
 - If a job specifies a TOML `config`, the runner calls `sn2md` with only `-o`/`-c`, so the config governs all other options. Jobs without a config inherit YAML defaults for flags and extra args (plus any pass-through CLI parameters).
