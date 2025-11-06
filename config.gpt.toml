@@ -4,8 +4,7 @@
 # ===============================
 
 # Use the small, fast, cheap model that works well for SN pages.
-#model = "llama3.2-vision:11b"
-model = "gemma3:12b"
+model = "gpt-4o-mini"
 
 # --------------------------------
 # Title Extraction Behavior

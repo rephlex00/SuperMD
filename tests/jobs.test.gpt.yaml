@@ -13,4 +13,4 @@ defaults:
 
 jobs:
   - name: Test
-    config: ~/Projects/sn2md/tests/test.toml
+    config: ~/Projects/sn2md/tests/test.gpt.toml
