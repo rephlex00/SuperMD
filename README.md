@@ -1,6 +1,6 @@
 # sn2md-batches
 
-`sn2md-batches.sh` is a zsh wrapper that runs multiple [sn2md](https://github.com/jamesdurkee/sn2md) jobs from a single YAML file. Each job can target a different Supernote input directory, output location, and TOML configuration while the script handles concurrency, logging, and per-job environment loading.
+`sn2md-batches.sh` is a zsh wrapper that runs multiple [sn2md](https://github.com/sn2md/sn2md) jobs from a single YAML file. Each job can target a different Supernote input directory, output location, and TOML configuration while the script handles concurrency, logging, and per-job environment loading.
 
 ## Requirements
 - zsh (script shebang)
@@ -45,7 +45,7 @@ After setup, the `sn2md` binary in `.venv/bin/sn2md` is used automatically. To p
    ./sn2md-batches.sh --setup
    ```
 
-4. Apply the local sn2md patches so the CLI supports per-note metadata and `.image/` media folders:
+4. Apply the local sn2md patches so the CLI supports per-note metadata and `attachments/` media folders:
 
    ```bash
    zsh patch.sh
@@ -72,7 +72,7 @@ After setup, the `sn2md` binary in `.venv/bin/sn2md` is used automatically. To p
 - Jobs that specify a TOML `config` only receive `-o` and `-c`; move per-job tuning into the TOML file.
 - Jobs without a config inherit any `flags.*` or `extra_args` defined in YAML (plus CLI arguments that follow the script-level switches).
 - Per-job `env_file` values let you inject different credential sets before each `sn2md` invocation.
-- The patched `sn2md` writes note assets under `note/output/.image/` and per-note metadata under `note/output/.meta/` so multiple notes can share a dated folder without conflicts. Reference images using the relative `.image/...` links that the generator emits.
+- The patched `sn2md` writes note assets under `note/output/attachments/` and per-note metadata under `note/output/.meta/` so multiple notes can share a dated folder without conflicts. Reference images using the relative `attachments/...` links that the generator emits.
 
 ## Sample Fixtures
 The repository includes:
@@ -84,4 +84,4 @@ The repository includes:
 - Missing `yq` or `sn2md` will stop the script early with a clear error message. Use `--setup` to install sn2md locally or install your own before running jobs.
 - Network errors (e.g., OpenAI connectivity) surface in the job log; rerun the job after connectivity is restored.
 - Use `--dry-run` to verify paths and configs before hitting the network or writing files.
-- If `sn2md` is reinstalled, rerun `zsh patch.sh` so the `.image/` and `.meta/` behaviour is restored before exporting notes.
+- If `sn2md` is reinstalled, rerun `zsh patch.sh` so the `attachments/` and `.meta/` behaviour is restored before exporting notes.

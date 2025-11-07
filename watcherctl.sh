@@ -3,28 +3,48 @@ set -euo pipefail
 setopt nobgnice
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-LABEL="com.jamesdurkee.sn2md-watch"
-PLIST_SOURCE="$SCRIPT_DIR/$LABEL.plist"
+LABEL="com.sn2md.watch"
+PLIST_TEMPLATE="$SCRIPT_DIR/$LABEL.plist.in"
 PLIST_TARGET="$HOME/Library/LaunchAgents/$LABEL.plist"
 LOG_PREFIX="[watcherctl]"
 
 usage() {
   cat <<'USAGE'
-Usage: watcherctl.sh --start | --stop | --restart
+Usage: watcherctl.sh --start | --stop | --restart | --status | --uninstall
 USAGE
 }
 
 require_plist() {
-  if [[ ! -f "$PLIST_SOURCE" ]]; then
-    print -u2 "$LOG_PREFIX plist missing at $PLIST_SOURCE"
+  if [[ ! -f "$PLIST_TEMPLATE" ]]; then
+    print -u2 "$LOG_PREFIX plist template missing at $PLIST_TEMPLATE"
     exit 1
   fi
 }
 
 install_plist() {
   mkdir -p "$(dirname "$PLIST_TARGET")"
-  if [[ ! -f "$PLIST_TARGET" || "$PLIST_SOURCE" -nt "$PLIST_TARGET" ]]; then
-    cp "$PLIST_SOURCE" "$PLIST_TARGET"
+  local tmp
+  tmp="$(mktemp "${TMPDIR:-/tmp}/watcherctl.XXXXXX")"
+  local project_dir="$SCRIPT_DIR"
+  local home_dir="$HOME"
+  python3 - "$PLIST_TEMPLATE" "$tmp" "$project_dir" "$home_dir" <<'PYCODE'
+import sys
+
+template, target, project_dir, home_dir = sys.argv[1:]
+with open(template, "r", encoding="utf-8") as src:
+    content = src.read()
+content = (
+    content
+    .replace("{{PROJECT_DIR}}", project_dir)
+    .replace("{{HOME}}", home_dir)
+)
+with open(target, "w", encoding="utf-8") as dst:
+    dst.write(content)
+PYCODE
+  if [[ ! -f "$PLIST_TARGET" ]] || ! cmp -s "$tmp" "$PLIST_TARGET"; then
+    mv "$tmp" "$PLIST_TARGET"
+  else
+    rm -f "$tmp"
   fi
 }
 
@@ -52,11 +72,36 @@ stop_service() {
   fi
 }
 
+status_service() {
+  local job="gui/$UID/$LABEL"
+  if launchctl print "$job" >/dev/null 2>&1; then
+    print "$LOG_PREFIX $LABEL is loaded (see launchctl print $job for details)"
+  else
+    if [[ -f "$PLIST_TARGET" ]]; then
+      print "$LOG_PREFIX $LABEL is not loaded but plist exists at $PLIST_TARGET"
+    else
+      print "$LOG_PREFIX $LABEL is not loaded and plist missing at $PLIST_TARGET"
+    fi
+  fi
+}
+
+uninstall_service() {
+  stop_service
+  if [[ -f "$PLIST_TARGET" ]]; then
+    rm -f "$PLIST_TARGET"
+    print "$LOG_PREFIX removed $PLIST_TARGET"
+  else
+    print "$LOG_PREFIX no plist to remove at $PLIST_TARGET"
+  fi
+}
+
 ACTION=""
 case "${1-}" in
   --start) ACTION="start" ;;
   --stop) ACTION="stop" ;;
   --restart) ACTION="restart" ;;
+  --status) ACTION="status" ;;
+  --uninstall) ACTION="uninstall" ;;
   *)
     usage
     exit 64
@@ -77,4 +122,6 @@ case "$ACTION" in
     stop_service
     start_service
     ;;
+  status) status_service ;;
+  uninstall) uninstall_service ;;
 esac
