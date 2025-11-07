@@ -10,7 +10,7 @@
 ## Execution Flow
 - Loads shared defaults from YAML once, then captures each job definition as JSON for processing.
 - Determines concurrency from `--jobs`, defaulting to single-threaded execution; uses a bounded worker pool to keep logs per job.
-- Normalises paths (tilde expansion, trimming), validates that required inputs/configs exist, and prepares the output directory (skipped during dry runs). Patched sn2md runs emit note assets into `.image/` and per-note metadata into `.meta/` within each note’s destination folder.
+- Normalises paths (tilde expansion, trimming), validates that required inputs/configs exist, and prepares the output directory (skipped during dry runs). Patched sn2md runs emit note assets into `attachments/` and per-note metadata into `.meta/` within each note’s destination folder.
 - Buffers stdout/stderr for each job, then prints the block when the job completes.
 - Sources `defaults.env_file` or a per-job `env_file` just before invoking `sn2md`, letting each job use different credentials.
 - If a job specifies a TOML `config`, the runner calls `sn2md` with only `-o`/`-c`, so the config governs all other options. Jobs without a config inherit YAML defaults for flags and extra args (plus any pass-through CLI parameters).

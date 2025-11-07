@@ -4,7 +4,7 @@
 # ===============================
 
 # Use the small, fast, cheap model that works well for SN pages.
-model = "gpt-4o-mini"
+model = "gpt-5-mini"
 
 # --------------------------------
 # Title Extraction Behavior
@@ -38,14 +38,21 @@ Convert the image to markdown:
 - Use $$, $ latex math blocks for math equations.
 - Support Obsidian syntaxes and dataview "field:: value" syntax.
 - Do not wrap text in codeblocks.
-- Convert any double underlined words to internal wiki links (double brackets).
+- Convert any double underlined words to internal wiki links (double brackets) only if you're abundantly sure the word is double underlined.
 - Use at most one blank line at a time; never produce consecutive blank lines.
 - Preserve the original nesting: match each item’s indentation level from the handwritten list when converting to Markdown, using two spaces per level.
-- When a handwritten checklist has a checked box, output - [x], and when the box contains a handwritten X, output - [-], keeping the original item text.
+- When transcribing handwritten checklists, map box states explicitly:
+  * Empty box (no mark) → '- [ ]'
+  * Checked/filled box → '- [x]'
+  * Box with a handwritten X (cancelled) → '- [-]'
+  Keep the original item text after the checkbox marker.
+- For incomplete checklist items (empty boxes), append ' ➕ {{year_month_day}}' immediately after the item text so the note date is captured with each open task.
+- When a header appears to be written in all capital letters assume it's a title heading H1 # and capitalize only the first letter of each word.
+- The first line should never be a blank line.
+
 
 If the image contains what appears to be a heading:
-- Determine a reasonable heading level based on visual prominence.
-- Prefer using '##' as the default heading marker.
+- Determine a reasonable heading level based on visual prominence. (##, ###, ####, #####)
 """
 
 
@@ -60,7 +67,6 @@ date: {{year_month_day}}
 type: supernote
 notefile: {{file_basename}}.note
 ---
-## {{file_basename}}
 {{llm_output}}
 
 # Images

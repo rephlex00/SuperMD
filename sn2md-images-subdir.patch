@@ -23,7 +23,7 @@
 +    images = []
 +    for png_path in pngs:
 +        image_name = os.path.basename(png_path)
-+        relative_link = posixpath.join(".image", image_name)
++        relative_link = posixpath.join("attachments", image_name)
 +        images.append(
 +            {
 +                "name": image_name,
@@ -41,7 +41,7 @@
  
 +    for image in context.get("images", []):
 +        image_name = image.get("name")
-+        image_link = image.get("link") or posixpath.join(".image", image_name)
++        image_link = image.get("link") or posixpath.join("attachments", image_name)
 +        if image_name:
 +            needle = f"]({image_name})"
 +            replacement = f"]({image_link})"
@@ -55,7 +55,7 @@
      output_path = output_path_template.render(context)
      output_path = os.path.join(output, output_path)
      os.makedirs(output_path, exist_ok=True)
-+    image_output_dir = os.path.join(output_path, ".image")
++    image_output_dir = os.path.join(output_path, "attachments")
 +    os.makedirs(image_output_dir, exist_ok=True)
  
      output_path_and_file = os.path.join(output_path, output_filename)

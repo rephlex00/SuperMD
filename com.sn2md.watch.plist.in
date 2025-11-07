@@ -3,16 +3,16 @@
 <plist version="1.0">
   <dict>
     <key>Label</key>
-    <string>com.jamesdurkee.sn2md-watch</string>
+    <string>com.sn2md.watch</string>
 
     <key>ProgramArguments</key>
     <array>
-      <string>/Users/jamesdurkee/Projects/sn2md/sn2md-watch.sh</string>
-      <string>/Users/jamesdurkee/Projects/sn2md/jobs.yaml</string>
+      <string>{{PROJECT_DIR}}/sn2md-watch.sh</string>
+      <string>{{PROJECT_DIR}}/jobs.yaml</string>
     </array>
 
     <key>WorkingDirectory</key>
-    <string>/Users/jamesdurkee/Projects/sn2md</string>
+    <string>{{PROJECT_DIR}}</string>
 
     <key>EnvironmentVariables</key>
     <dict>
@@ -26,8 +26,8 @@
     <true/>
 
     <key>StandardOutPath</key>
-    <string>/Users/jamesdurkee/Library/Logs/sn2md-watch.log</string>
+    <string>{{HOME}}/Library/Logs/sn2md-watch.log</string>
     <key>StandardErrorPath</key>
-    <string>/Users/jamesdurkee/Library/Logs/sn2md-watch.err</string>
+    <string>{{HOME}}/Library/Logs/sn2md-watch.err</string>
   </dict>
 </plist>
