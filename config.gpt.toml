@@ -4,7 +4,7 @@
 # ===============================
 
 # Use the small, fast, cheap model that works well for SN pages.
-model = "gpt-5-mini"
+model = "gpt-4o-mini"
 
 # --------------------------------
 # Title Extraction Behavior
@@ -41,12 +41,23 @@ Convert the image to markdown:
 - Convert any double underlined words to internal wiki links (double brackets) only if you're abundantly sure the word is double underlined.
 - Use at most one blank line at a time; never produce consecutive blank lines.
 - Preserve the original nesting: match each item’s indentation level from the handwritten list when converting to Markdown, using two spaces per level.
+- Treat something as a checklist only when you can clearly see a square checkbox (whether empty or checked) immediately before the handwritten text; otherwise keep the item as a regular bullet/dash (e.g., start with '- ' and never add brackets).
+- Checklist vs bullet examples:
+  * Checklist: ☐ Buy milk → '- [ ] Buy milk'
+  * Bullet: • Grocery ideas → '- Grocery ideas'
 - When transcribing handwritten checklists, map box states explicitly:
   * Empty box (no mark) → '- [ ]'
   * Checked/filled box → '- [x]'
-  * Box with a handwritten X (cancelled) → '- [-]'
   Keep the original item text after the checkbox marker.
-- For incomplete checklist items (empty boxes), append ' ➕ {{year_month_day}}' immediately after the item text so the note date is captured with each open task.
+- For incomplete checklist items (empty boxes), append ' ➕ {year_month_day}' immediately after the item text so the note date is captured with each open task.
+  - For complete checklist items (checked boxes), append both suffixes in this exact order: first ' ➕ {year_month_day}' then ' ✅ {year_month_day}' (meaning the final text ends with "➕ … ✅ …"). Never skip the ✅ suffix when a box is checked.
+- Format examples:
+  * Empty box: '- [ ] Call mom ➕ {year_month_day}'
+  * Checked box: '- [x] Submit report ➕ {year_month_day} ✅ {year_month_day}'
+- Append the date/emoji at most once per checklist item; if the handwritten text already includes a date or emoji suffix, leave it unchanged.
+- If an item already appears in Markdown checkbox form (e.g., '- [ ] Task' or '- [x] Done'), copy it verbatim without modifying the checkbox state or appending extra markers.
+- Do not mistake hand written bullets (small circles next to a line in a list) for checkboxes.
+- Only checklists should have additional information appended, a normal list should only be transcribed accurately.
 - When a header appears to be written in all capital letters assume it's a title heading H1 # and capitalize only the first letter of each word.
 - The first line should never be a blank line.
 
@@ -66,10 +77,12 @@ template = """
 date: {{year_month_day}}
 type: supernote
 notefile: {{file_basename}}.note
+coverimage: attachments/{{images[0].name}}
+tags:
 ---
 {{llm_output}}
 
-# Images
+## Images
 {% for image in images %}
 ![{{ image.name }}]({{image.name}})
 {%- endfor %}
