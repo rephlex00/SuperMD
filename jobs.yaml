@@ -11,12 +11,15 @@ defaults:
   extra_args: []             # additional args for jobs without a config
 
 jobs:
-  - name: Personal
+  - name: Notes
     input: '~/Library/Containers/com.ratta.supernote/Data/Library/Application Support/com.ratta.supernote/1145440271026413568/Supernote/Note/Personal'
-    output: ~/Documents/Obsidian/Personal/Supernote
-    config: ~/Projects/sn2md/config.gpt.toml
-
+    output: '~/Documents/Obsidian/Personal/03 Supernote/Notes'
+    config: ~/Documents/Development/sn2md/config.gpt.toml
+  - name: Lists
+    input: '~/Library/Containers/com.ratta.supernote/Data/Library/Application Support/com.ratta.supernote/1145440271026413568/Supernote/Note/Lists'
+    output: '~/Documents/Obsidian/Personal/03 Supernote/Lists'
+    config: ~/Documents/Development/sn2md/config.gpt.toml
   - name: Work
     input: '~/Library/Containers/com.ratta.supernote/Data/Library/Application Support/com.ratta.supernote/1145440271026413568/Supernote/Note/Work'
-    output: ~/Documents/Obsidian/Work/Supernote
-    config: ~/Projects/sn2md/config.gpt.toml
+    output: '~/Documents/Obsidian/Work/Supernote'
+    config: ~/Documents/Development/sn2md/config.gpt.toml
