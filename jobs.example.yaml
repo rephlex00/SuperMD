@@ -1,7 +1,7 @@
 # Global defaults used when a job omits a field
 defaults:
   input: ~/Projects/sn2md/in
-  output: ~/Projects/sn2md
+  output: ~/Projects/sn2md/out
   env_file: ~/.env           # optional; sourced if exists
   flags:
     force: false             # sn2md --force
@@ -11,19 +11,15 @@ defaults:
   extra_args: []             # additional args for jobs without a config
 
 jobs:
-  - name: Journal
-    input: /Volumes/Supernote/Journal
-    output: ~/Vault/Journal
-    config: ~/sn2md-configs/journal.toml
-
+  - name: Notes
+    input: '~/Vault/Supernote/Note/Personal'
+    output: '~/Vault/Obsidian/Personal/03 Supernote/Notes'
+    config: ./config.gpt.toml
+  - name: Lists
+    input: '~/Vault/Supernote/Note/Lists'
+    output: '~/Vault/Obsidian/Personal/03 Supernote/Lists'
+    config: ./config.gpt.toml
   - name: Work
-    input: /Volumes/Supernote/Work
-    output: ~/Vault/Work
-    config: ~/sn2md-configs/work.toml
-    # uses all defaults
-
-  - name: Sketchbook
-    input: /Volumes/Supernote/Sketchbook
-    output: ~/Vault/Sketchbook
-    config: ~/sn2md-configs/sketch.toml
-    env_file: ~/.env-sketch  # example of a per-job credential file
+    input: '~/Vault/Supernote/Note/Work'
+    output: '~/Vault/Obsidian/Work/Supernote'
+    config: ./config.gpt.toml
