@@ -27,16 +27,19 @@ install_plist() {
   tmp="$(mktemp "${TMPDIR:-/tmp}/watcherctl.XXXXXX")"
   local project_dir="$SCRIPT_DIR"
   local home_dir="$HOME"
-  python3 - "$PLIST_TEMPLATE" "$tmp" "$project_dir" "$home_dir" <<'PYCODE'
+  # Capture current PATH to ensure user-installed tools (uv, yq, etc.) are found
+  local current_path="$PATH"
+  python3 - "$PLIST_TEMPLATE" "$tmp" "$project_dir" "$home_dir" "$current_path" <<'PYCODE'
 import sys
 
-template, target, project_dir, home_dir = sys.argv[1:]
+template, target, project_dir, home_dir, env_path = sys.argv[1:]
 with open(template, "r", encoding="utf-8") as src:
     content = src.read()
 content = (
     content
     .replace("{{PROJECT_DIR}}", project_dir)
     .replace("{{HOME}}", home_dir)
+    .replace("{{PATH}}", env_path)
 )
 with open(target, "w", encoding="utf-8") as dst:
     dst.write(content)
