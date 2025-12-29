@@ -235,6 +235,12 @@ DEF_MODEL=""
 
 # load_defaults: read shared defaults from the YAML config
 load_defaults() {
+  if [[ ! -r "$CONF_FILE" && "$CONF_FILE" == "$DEFAULT_CONF" ]]; then
+     die "Config file '$CONF_FILE' not found.
+    To start, copy the example config:
+      cp jobs.example.yaml jobs.yaml
+    Then edit jobs.yaml to set your input/output paths." 66
+  fi
   [[ -r "$CONF_FILE" ]] || die "Config not readable: $CONF_FILE" 66
   DEF_INPUT="$(yq eval -r '.defaults.input // ""' "$CONF_FILE")"
   DEF_OUTPUT="$(yq eval -r '.defaults.output // ""' "$CONF_FILE")"
