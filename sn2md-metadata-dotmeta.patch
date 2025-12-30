@@ -1,0 +1,80 @@
+--- a/sn2md/metadata.py	2025-11-05 17:43:43
++++ b/sn2md/metadata.py	2025-11-05 17:43:52
+@@ -8,14 +8,28 @@
+ logger = logging.getLogger(__name__)
+ 
+ 
+-def check_metadata_file(metadata_file: str) -> ConversionMetadata | None:
++def _metadata_filename(source_file: str) -> str:
++    """Return a stable, per-source metadata filename."""
++    base_name = os.path.splitext(os.path.basename(source_file))[0]
++    safe_name = "".join(
++        c if c.isalnum() or c in "-._" else "_"
++        for c in base_name
++    )
++    digest = hashlib.sha1(os.path.abspath(source_file).encode("utf-8")).hexdigest()[:16]
++    return f"{safe_name}-{digest}.yaml"
++
++
++def check_metadata_file(metadata_dir: str, source_file: str) -> ConversionMetadata | None:
+     """Check the hashes of the source file against the metadata.
+ 
+     Raises a ValueError if the source file hasn't been modified.
+ 
+     Returns the computed source and output hashes.
+     """
+-    metadata_path = os.path.join(metadata_file, ".sn2md.metadata.yaml")
++    if not os.path.isdir(metadata_dir):
++        return None
++
++    metadata_path = os.path.join(metadata_dir, _metadata_filename(source_file))
+     if os.path.exists(metadata_path):
+         with open(metadata_path, "r") as f:
+             data = yaml.safe_load(f)
+@@ -42,16 +56,16 @@
+             return metadata
+ 
+ 
+-def write_metadata_file(source_file: str, output_file: str) -> None:
++def write_metadata_file(metadata_dir: str, source_file: str, output_file: str) -> None:
+     """Write the source hash and path to the metadata file."""
+-    output_path = os.path.dirname(output_file)
++    os.makedirs(metadata_dir, exist_ok=True)
+     with open(output_file, "rb") as f:
+         output_hash = hashlib.sha1(f.read()).hexdigest()
+ 
+     with open(source_file, "rb") as f:
+         source_hash = hashlib.sha1(f.read()).hexdigest()
+ 
+-    metadata_path = os.path.join(output_path, ".sn2md.metadata.yaml")
++    metadata_path = os.path.join(metadata_dir, _metadata_filename(source_file))
+     with open(metadata_path, "w") as f:
+         yaml.dump(
+             asdict(ConversionMetadata(
+@@ -63,4 +77,3 @@
+             f,
+         )
+ 
+-
+--- a/sn2md/importer.py	2025-11-05 17:43:43
++++ b/sn2md/importer.py	2025-11-05 17:43:56
+@@ -199,7 +199,8 @@
+         png_name = os.path.basename(png_path)
+         os.rename(png_path, os.path.join(output_path, png_name))
+ 
+-    write_metadata_file(file_name, output_path_and_file)
++    metadata_dir = os.path.join(output_path, ".meta")
++    write_metadata_file(metadata_dir, file_name, output_path_and_file)
+ 
+     logger.debug("Moved images to %s", output_path)
+ 
+@@ -214,7 +215,8 @@
+     output_path = output_path_template.render(basic_context)
+     output_path = os.path.join(output, output_path)
+ 
+-    check_metadata_file(output_path)
++    metadata_dir = os.path.join(output_path, ".meta")
++    check_metadata_file(metadata_dir, file_name)
+ 
+ 
+ def import_supernote_file_core(

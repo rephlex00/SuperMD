@@ -1,0 +1,97 @@
+--- a/sn2md/importer.py	2025-11-05 19:23:51
++++ b/sn2md/importer.py	2025-11-05 19:22:12
+@@ -4,6 +4,7 @@
+ import shutil
+ import logging
+ import os
++import posixpath
+ from contextlib import contextmanager
+ from datetime import datetime
+ 
+@@ -140,14 +141,18 @@
+     template_output: str,
+ ) -> dict:
+     file_basename = os.path.splitext(os.path.basename(file_name))[0]
+-    images = [
+-        {
+-            "name": os.path.basename(png_path),
+-            "rel_path": png_path,
+-            "abs_path": os.path.abspath(png_path),
+-        }
+-        for png_path in pngs
+-    ]
++    images = []
++    for png_path in pngs:
++        image_name = os.path.basename(png_path)
++        relative_link = posixpath.join("attachments", image_name)
++        images.append(
++            {
++                "name": image_name,
++                "rel_path": relative_link,
++                "link": relative_link,
++                "abs_path": os.path.abspath(png_path),
++            }
++        )
+ 
+     # TODO add pages - for each page include keywords and titles
+     context = {
+@@ -181,6 +186,15 @@
+ ) -> None:
+     jinja_markdown = template.render(context)
+ 
++    for image in context.get("images", []):
++        image_name = image.get("name")
++        image_link = image.get("link") or posixpath.join("attachments", image_name)
++        if image_name:
++            needle = f"]({image_name})"
++            replacement = f"]({image_link})"
++            if needle in jinja_markdown and replacement not in jinja_markdown:
++                jinja_markdown = jinja_markdown.replace(needle, replacement)
++
+     output_filename_template = Template(config.output_filename_template)
+     output_filename = output_filename_template.render(context)
+ 
+@@ -188,21 +202,24 @@
+     output_path = output_path_template.render(context)
+     output_path = os.path.join(output, output_path)
+     os.makedirs(output_path, exist_ok=True)
++    image_output_dir = os.path.join(output_path, "attachments")
++    os.makedirs(image_output_dir, exist_ok=True)
+ 
+     output_path_and_file = os.path.join(output_path, output_filename)
+     with open(output_path_and_file, "w") as f:
+         _ = f.write(jinja_markdown)
+     logger.debug("Wrote output to %s", output_path_and_file)
+ 
+-    # copy everything from image_output_path to output_path:
++    # move everything from image_output_path to the dedicated image folder:
+     for png_path in pngs:
+         png_name = os.path.basename(png_path)
+-        os.rename(png_path, os.path.join(output_path, png_name))
++        destination = os.path.join(image_output_dir, png_name)
++        os.rename(png_path, destination)
+ 
+     metadata_dir = os.path.join(output_path, ".meta")
+     write_metadata_file(metadata_dir, file_name, output_path_and_file)
+ 
+-    logger.debug("Moved images to %s", output_path)
++    logger.debug("Moved images to %s", image_output_dir)
+ 
+     print(output_path_and_file)
+ 
+--- a/sn2md/types.py	2025-11-05 19:23:51
++++ b/sn2md/types.py	2025-11-05 19:22:12
+@@ -30,7 +30,7 @@
+ 
+ # Images
+ {% for image in images %}
+-- ![{{ image.name }}]({{image.name}})
++- ![{{ image.name }}]({{ image.link }})
+ {%- endfor %}
+ 
+ {% if keywords %}
+@@ -101,4 +101,3 @@
+     def get_notebook(self, filename: str) -> Notebook | None:
+         pass
+ 
+-

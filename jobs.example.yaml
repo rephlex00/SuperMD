@@ -1,0 +1,25 @@
+# Global defaults used when a job omits a field
+defaults:
+  input: ~/Projects/sn2md/in
+  output: ~/Projects/sn2md/out
+  env_file: ~/.env           # optional; sourced if exists
+  flags:
+    force: false             # sn2md --force
+    progress: true           # sn2md --progress / --no-progress
+    level: INFO              # sn2md -l INFO|DEBUG|WARNING|ERROR|CRITICAL
+    model: gpt-4o-mini       # sn2md -m value
+  extra_args: []             # additional args for jobs without a config
+
+jobs:
+  - name: Notes
+    input: '~/Vault/Supernote/Note/Personal'
+    output: '~/Vault/Obsidian/Personal/03 Supernote/Notes'
+    config: ./config.gpt.toml
+  - name: Lists
+    input: '~/Vault/Supernote/Note/Lists'
+    output: '~/Vault/Obsidian/Personal/03 Supernote/Lists'
+    config: ./config.gpt.toml
+  - name: Work
+    input: '~/Vault/Supernote/Note/Work'
+    output: '~/Vault/Obsidian/Work/Supernote'
+    config: ./config.gpt.toml
