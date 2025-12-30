@@ -1,0 +1,11 @@
+llm
+llm-ollama
+Jinja2
+numpy
+pillow
+pydantic
+PyMuPDF
+pypng
+PyYAML
+tqdm
+click
