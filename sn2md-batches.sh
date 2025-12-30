@@ -175,26 +175,14 @@ require_command() {
 
 # discover_sn2md: locate the sn2md executable from env, .venv, or PATH
 discover_sn2md() {
-  local resolved
-  if [[ -n "$SN2MD_CMD" ]]; then
-    if [[ -x "$SN2MD_CMD" ]]; then
-      return
-    elif resolved="$(command -v "$SN2MD_CMD" 2>/dev/null || true)" && [[ -n "$resolved" ]]; then
-      SN2MD_CMD="$resolved"
-      return
-    else
-      die "SN2MD_EXEC points to a non-existent command: $SN2MD_CMD" 127
-    fi
-  fi
-
-  if [[ -x "$DEFAULT_VENV/bin/sn2md" ]]; then
-    SN2MD_CMD="$DEFAULT_VENV/bin/sn2md"
+  if [[ -x "$DEFAULT_VENV/bin/python" ]]; then
+    SN2MD_CMD="$DEFAULT_VENV/bin/python"
     return
   fi
-
-  if command -v sn2md >/dev/null 2>&1; then
-    SN2MD_CMD="$(command -v sn2md)"
-    return
+  
+  if command -v python3 >/dev/null 2>&1; then
+      SN2MD_CMD="$(command -v python3)"
+      return
   fi
 
   SN2MD_CMD=""
@@ -208,21 +196,17 @@ bootstrap_sn2md() {
   [[ -n "$uv_bin" ]] || uv_bin="$(command -v uv 2>/dev/null || true)"
   [[ -n "$uv_bin" ]] || die "uv not found. Install it from https://astral.sh/uv or set UV_BIN=/path/to/uv."
 
-  log_info "Bootstrapping sn2md with uv (python ${UV_PYTHON_VERSION})…"
+  log_info "Bootstrapping dependencies with uv (python ${UV_PYTHON_VERSION})…"
 
   if [[ ! -d "$venv_path" ]]; then
     "$uv_bin" venv --python "$UV_PYTHON_VERSION" "$venv_path" || die "uv venv failed"
   fi
 
-  if [[ ! -x "$venv_path/bin/sn2md" ]]; then
-    "$uv_bin" pip install --python "$venv_path/bin/python" sn2md || die "uv pip install sn2md failed"
+  if [[ -f "$SCRIPT_DIR/requirements.txt" ]]; then
+     "$uv_bin" pip install --python "$venv_path/bin/python" -r "$SCRIPT_DIR/requirements.txt" || die "dependency install failed"
   fi
 
-  if ! "$uv_bin" pip install --python "$venv_path/bin/python" llm-ollama >/dev/null 2>&1; then
-    log_warn "llm-ollama plugin installation failed; retry with UV_BIN pointing at uv if installed elsewhere"
-  fi
-
-  SN2MD_CMD="$venv_path/bin/sn2md"
+  SN2MD_CMD="$venv_path/bin/python"
 }
 
 DEF_INPUT=""
@@ -409,7 +393,8 @@ run_job() {
       done < <(emit_dry_run_listing "$in_path")
       echo "[dry-run] Output would be written under: $out_path"
     else
-      if "$SN2MD_CMD" "${sn_args[@]}" directory "$in_path"; then
+      # Run sn2md via python module from src directory
+      if PYTHONPATH="$SCRIPT_DIR/src" "$SN2MD_CMD" -m sn2md "${sn_args[@]}" directory "$in_path"; then
         job_status=0
       else
         job_status=$?
