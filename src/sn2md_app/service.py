@@ -1,0 +1,116 @@
+import os
+import sys
+import shutil
+from pathlib import Path
+from string import Template
+
+PLIST_TEMPLATE = """<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+  <dict>
+    <key>Label</key>
+    <string>com.sn2md.watch</string>
+
+    <key>ProgramArguments</key>
+    <array>
+      <string>$SN2MD_CLI</string>
+      <string>watch</string>
+      <string>--config</string>
+      <string>$CONFIG_PATH</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>$PROJECT_DIR</string>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+      <key>PATH</key>
+      <string>$PATH_VAR</string>
+      <key>PYTHONPATH</key>
+      <string>$PYTHONPATH</string>
+    </dict>
+
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+
+    <key>StandardOutPath</key>
+    <string>$HOME/Library/Logs/sn2md-watch.log</string>
+    <key>StandardErrorPath</key>
+    <string>$HOME/Library/Logs/sn2md-watch.err</string>
+  </dict>
+</plist>
+"""
+
+def generate_plist(config_path: str):
+    project_dir = os.getcwd()
+    home_dir = os.path.expanduser("~")
+    
+    # Path to the sn2md-cli executable
+    # We want the absolute path to the executable running this script
+    sn2md_cli_path = sys.executable 
+    # Actually, we are running via `python -m sn2md_app.cli`, but usually we want
+    # the entry script if it exists. 
+    # However, forcing the python executable + `-m sn2md_app.cli` or similar is safer
+    # than relying on a shim that might move.
+    # BUT, the pyproject.toml defines a script. Let's try to find it.
+    
+    # Best bet for now: verify if sys.executable is the venv python.
+    # Logic: <venv>/bin/python -> <venv>/bin/sn2md-cli
+    
+    python_bin = Path(sys.executable)
+    possible_cli = python_bin.parent / "sn2md-cli"
+    
+    if possible_cli.exists():
+        executable = str(possible_cli)
+    else:
+        # Fallback: run via python module
+        # Arguments array needs to be constructed differently if we do this, 
+        # but the template assumes a single executable string.
+        # Let's assume the pip install worked and user has the bin on path or we find it relative.
+        executable = shutil.which("sn2md-cli") or str(possible_cli)
+
+    env_path = os.environ.get("PATH", "")
+    python_path = os.environ.get("PYTHONPATH", str(Path(project_dir) / "src"))
+
+    template = Template(PLIST_TEMPLATE)
+    plist_content = template.substitute(
+        SN2MD_CLI=executable,
+        CONFIG_PATH=os.path.abspath(config_path),
+        PROJECT_DIR=project_dir,
+        HOME=home_dir,
+        PATH_VAR=env_path,
+        PYTHONPATH=python_path
+    )
+    
+    return plist_content
+
+def install_service(config_path: str = "jobs.yaml", dry_run: bool = False):
+    plist = generate_plist(config_path)
+    
+    dest_dir = os.path.expanduser("~/Library/LaunchAgents")
+    dest_path = os.path.join(dest_dir, "com.sn2md.watch.plist")
+    
+    if dry_run:
+        print(f"[dry-run] Would write plist to: {dest_path}")
+        print(plist)
+        return
+
+    os.makedirs(dest_dir, exist_ok=True)
+    with open(dest_path, "w", encoding="utf-8") as f:
+        f.write(plist)
+    
+    print(f"Service installed to: {dest_path}")
+    print("To start the service, run:")
+    print("  launchctl unload ~/Library/LaunchAgents/com.sn2md.watch.plist 2>/dev/null")
+    print("  launchctl load ~/Library/LaunchAgents/com.sn2md.watch.plist")
+    
+def uninstall_service():
+    dest_path = os.path.expanduser("~/Library/LaunchAgents/com.sn2md.watch.plist")
+    if os.path.exists(dest_path):
+        subprocess.run(["launchctl", "unload", dest_path], check=False)
+        os.remove(dest_path)
+        print(f"Service uninstalled: {dest_path}")
+    else:
+        print("Service not installed.")
