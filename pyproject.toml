@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sn2md-app"
+version = "0.1.0"
+description = "Supernote to Markdown converter and sync tool"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "Apache-2.0" }
+dependencies = [
+    "sn2md",
+    "supernotelib",
+    "llm",
+    "llm-ollama",
+    "Jinja2",
+    "numpy",
+    "pillow",
+    "pydantic>=2.0",
+    "PyMuPDF",
+    "pypng",
+    "PyYAML",
+    "tqdm",
+    "click",
+    "watchdog",
+]
+
+[project.scripts]
+sn2md-cli = "sn2md_app.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]

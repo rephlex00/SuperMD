@@ -1,11 +1,14 @@
+sn2md
+supernotelib
 llm
 llm-ollama
 Jinja2
 numpy
 pillow
-pydantic
+pydantic>=2.0
 PyMuPDF
 pypng
 PyYAML
 tqdm
 click
+watchdog
