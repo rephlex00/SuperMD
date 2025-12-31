@@ -3,8 +3,10 @@ from typing import Any, Dict, List, Optional
 import yaml
 from pydantic import BaseModel, Field
 
+import os
+
 class JobFlags(BaseModel):
-    model: str = "gpt-4o-mini"
+    model: str = Field(default_factory=lambda: os.environ.get("OPENAI_MODEL", "gpt-4o-mini"))
     level: str = "INFO"
     force: bool = False
     progress: bool = True
@@ -18,6 +20,19 @@ class JobConfig(BaseModel):
     extra_args: List[str] = Field(default_factory=list)
     flags: JobFlags = Field(default_factory=JobFlags)
 
+    @staticmethod
+    def _expand(v: Any) -> Any:
+        if isinstance(v, str):
+            return os.path.expandvars(v)
+        return v
+
+    def __init__(self, **data):
+        # Expand vars in creating
+        for k, v in data.items():
+            if isinstance(v, str):
+                data[k] = os.path.expandvars(v)
+        super().__init__(**data)
+
 class BatchConfig(BaseModel):
     defaults: Dict[str, Any] = Field(default_factory=dict)
     jobs: List[Dict[str, Any]] = Field(default_factory=list)
@@ -25,6 +40,14 @@ class BatchConfig(BaseModel):
 def load_jobs_config(path: str | Path) -> BatchConfig:
     with open(path, "r", encoding="utf-8") as f:
         data = yaml.safe_load(f)
+    
+    # Pre-expand defaults in the dictionary before creating model if possible, 
+    # but BatchConfig stores them as Dict, so we can iterate.
+    if "defaults" in data:
+        for k, v in data["defaults"].items():
+            if isinstance(v, str):
+                data["defaults"][k] = os.path.expandvars(v)
+                
     return BatchConfig(**data)
 
 def merge_defaults(job_data: Dict[str, Any], defaults: Dict[str, Any]) -> JobConfig:

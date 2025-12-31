@@ -1,0 +1,10 @@
+# Docker optimized jobs config
+defaults:
+  input: ${SN2MD_DEFAULT_INPUT}
+  output: ${SN2MD_DEFAULT_OUTPUT}
+  flags:
+    level: INFO
+    progress: false  # Less noise in logs
+
+jobs:
+  - name: Default
