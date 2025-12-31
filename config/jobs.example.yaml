@@ -14,12 +14,12 @@ jobs:
   - name: Notes
     input: '~/Vault/Supernote/Note/Personal'
     output: '~/Vault/Obsidian/Personal/03 Supernote/Notes'
-    config: ./config.gpt.toml
+    config: ./config/settings.toml
   - name: Lists
     input: '~/Vault/Supernote/Note/Lists'
     output: '~/Vault/Obsidian/Personal/03 Supernote/Lists'
-    config: ./config.gpt.toml
+    config: ./config/settings.toml
   - name: Work
     input: '~/Vault/Supernote/Note/Work'
     output: '~/Vault/Obsidian/Work/Supernote'
-    config: ./config.gpt.toml
+    config: ./config/settings.toml

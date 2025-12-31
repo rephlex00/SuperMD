@@ -3,6 +3,7 @@ import sys
 import shutil
 from pathlib import Path
 from string import Template
+import subprocess
 
 PLIST_TEMPLATE = """<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -114,3 +115,39 @@ def uninstall_service():
         print(f"Service uninstalled: {dest_path}")
     else:
         print("Service not installed.")
+
+def status_service():
+    dest_path = os.path.expanduser("~/Library/LaunchAgents/com.sn2md.watch.plist")
+    
+    # Check if plist exists
+    installed = os.path.exists(dest_path)
+    print(f"Plist installed: {'Yes' if installed else 'No'} ({dest_path})")
+    
+    # Check if loaded in launchd
+    try:
+        # launchctl list returns 0 if found, non-zero if not found
+        result = subprocess.run(
+            ["launchctl", "list", "com.sn2md.watch"],
+            capture_output=True,
+            text=True,
+            check=False
+        )
+        
+        if result.returncode == 0:
+            print("Service status:   LOADED / RUNNING")
+            # Parse output for PID or LastExitStatus if desired, but raw output is often enough
+            # print(result.stdout)
+            
+            # Simple PID extraction
+            for line in result.stdout.splitlines():
+                if '"PID"' in line:
+                    pid = line.split()[-1].replace('"', '').replace(';', '')
+                    print(f"PID:              {pid}")
+                elif '"LastExitStatus"' in line:
+                    status = line.split()[-1].replace('"', '').replace(';', '')
+                    print(f"Last Exit Status: {status}")
+        else:
+            print("Service status:   NOT LOADED")
+            
+    except Exception as e:
+        print(f"Error checking status: {e}")

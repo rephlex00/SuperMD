@@ -42,3 +42,10 @@ def install(config, dry_run):
 def uninstall():
     """Unload and remove the launchd service"""
     uninstall_service()
+
+from .service import status_service
+
+@service.command()
+def status():
+    """Check status of the background service"""
+    status_service()
