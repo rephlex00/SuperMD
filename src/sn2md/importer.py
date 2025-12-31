@@ -228,7 +228,10 @@ def generate_output(
 
     logger.debug("Moved images to %s", image_output_dir)
 
-    print(output_path_and_file)
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    import click
+    msg = f"[{timestamp}] Generated: {output_path_and_file}"
+    tqdm.write(click.style(msg, fg="green"))
 
 
 def verify_metadata_file(config: Config, output: str, file_name: str) -> None:
