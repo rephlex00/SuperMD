@@ -5,8 +5,6 @@ Summary: Supernote to Markdown converter and sync tool
 License: Apache-2.0
 Requires-Python: >=3.11
 Description-Content-Type: text/markdown
-Requires-Dist: sn2md
-Requires-Dist: supernotelib
 Requires-Dist: llm
 Requires-Dist: llm-ollama
 Requires-Dist: Jinja2
@@ -19,6 +17,11 @@ Requires-Dist: PyYAML
 Requires-Dist: tqdm
 Requires-Dist: click
 Requires-Dist: watchdog
+Requires-Dist: platformdirs
+Requires-Dist: potracer
+Requires-Dist: svgwrite
+Requires-Dist: colour
+Requires-Dist: svglib
 Provides-Extra: test
 Requires-Dist: pytest; extra == "test"
 

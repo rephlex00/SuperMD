@@ -10,8 +10,6 @@ readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "Apache-2.0" }
 dependencies = [
-    "sn2md",
-    "supernotelib",
     "llm",
     "llm-ollama",
     "Jinja2",
@@ -24,6 +22,12 @@ dependencies = [
     "tqdm",
     "click",
     "watchdog",
+    # Transitive dependencies for vendored libs
+    "platformdirs", # sn2md
+    "potracer",     # supernotelib
+    "svgwrite",     # supernotelib
+    "colour",       # supernotelib
+    "svglib",       # supernotelib
 ]
 
 [project.optional-dependencies]
