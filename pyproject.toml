@@ -26,6 +26,11 @@ dependencies = [
     "watchdog",
 ]
 
+[project.optional-dependencies]
+test = [
+    "pytest",
+]
+
 [project.scripts]
 sn2md-cli = "sn2md_app.cli:main"
 

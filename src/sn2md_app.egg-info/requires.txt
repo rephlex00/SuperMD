@@ -12,3 +12,6 @@ PyYAML
 tqdm
 click
 watchdog
+
+[test]
+pytest
