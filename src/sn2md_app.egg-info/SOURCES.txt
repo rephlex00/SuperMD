@@ -35,3 +35,6 @@ src/supernotelib/utils.py
 src/supernotelib/cmds/__init__.py
 src/supernotelib/cmds/supernote_fuse.py
 src/supernotelib/cmds/supernote_tool.py
+tests/test_batches.py
+tests/test_config.py
+tests/test_service.py
