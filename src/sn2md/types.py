@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 
 from pydantic.dataclasses import dataclass
-from supernotelib import Notebook
+from sn2md.supernotelib import Notebook
 
 TO_MARKDOWN_TEMPLATE = """###
 Context (the last few lines of markdown from the previous page):

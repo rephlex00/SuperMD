@@ -1,6 +1,6 @@
 from pathlib import Path
 import pytest
-from sn2md_app.config import load_jobs_config, merge_defaults, JobConfig, BatchConfig
+from sn2md.job_config import load_jobs_config, merge_defaults, JobConfig, BatchConfig
 
 def test_load_valid_config(mock_config_file):
     """Verify that a valid YAML config is loaded correctly."""

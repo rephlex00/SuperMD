@@ -1,5 +1,5 @@
 import os
-from sn2md_app.service import generate_plist
+from sn2md.service import generate_plist
 
 def test_generate_plist(mock_workspace):
     """Verify plist content generation."""

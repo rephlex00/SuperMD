@@ -13,7 +13,7 @@ from sn2md.utils import shorten_path
 
 
 from jinja2 import Template
-from supernotelib import Notebook
+from sn2md.supernotelib import Notebook
 
 from sn2md.ai_utils import image_to_markdown, image_to_text
 from sn2md.importers.atelier import AtelierExtractor

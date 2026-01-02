@@ -1,2 +1,2 @@
 [console_scripts]
-sn2md-cli = sn2md_app.cli:main
+sn2md-cli = sn2md.cli:cli

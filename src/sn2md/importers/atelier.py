@@ -4,7 +4,7 @@ import os
 import sqlite3
 import sys
 
-import supernotelib as sn
+import sn2md.supernotelib as sn
 from PIL import Image
 from typing_extensions import override
 
