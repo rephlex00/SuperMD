@@ -110,7 +110,7 @@ def tilde_expand(path_str: str) -> str:
         return ""
     return os.path.expanduser(path_str)
 
-def run_single_job(job: JobConfig, dry_run: bool = False) -> bool:
+def run_single_job(job: JobConfig, dry_run: bool = False, debug_mode: bool = False) -> bool:
     log(f"[job] Starting: {job.name}")
     
     in_path = tilde_expand(job.input)
@@ -122,14 +122,22 @@ def run_single_job(job: JobConfig, dry_run: bool = False) -> bool:
         return False
         
     # Construct arguments for sn2md
-    cmd = [sys.executable, "-m", "sn2md", "directory", in_path, "-o", out_path]
+    # Note: Click group options (--output, --level, --model, etc.) must come BEFORE the subcommand (directory)
+    cmd = [sys.executable, "-m", "sn2md"]
     
+    # Add group options first
     if cfg_path:
         cmd.extend(["-c", cfg_path])
-    else:
-        # Pass flags if no config file
-        cmd.extend(["-m", job.flags.model])
+    
+    # Flags (override config if needed or if config missing)
+    # Even if config exists, we might want to override debug level
+    if debug_mode:
+        cmd.extend(["-l", "DEBUG"])
+    elif not cfg_path:
         cmd.extend(["-l", job.flags.level])
+
+    if not cfg_path:
+        cmd.extend(["-m", job.flags.model])
         if job.flags.force:
             cmd.append("--force")
         if job.flags.progress:
@@ -137,6 +145,13 @@ def run_single_job(job: JobConfig, dry_run: bool = False) -> bool:
         else:
             cmd.append("--no-progress")
             
+    # Add output flag (it's a group option too)
+    cmd.extend(["-o", out_path])
+    
+    # Add subcommand and arguments
+    cmd.append("directory")
+    cmd.append(in_path)
+    
     cmd.extend(job.extra_args)
     
     # Environment variables
@@ -181,7 +196,7 @@ def run_single_job(job: JobConfig, dry_run: bool = False) -> bool:
         log(f"[job {job.name}] FAILED (exception: {e})")
         return False
 
-def run_batches(config_path: str, parallelism: int = 1, dry_run: bool = False):
+def run_batches(config_path: str, parallelism: int = 1, dry_run: bool = False, debug_mode: bool = False):
     try:
         batch_config = load_jobs_config(config_path)
     except FileNotFoundError:
@@ -198,7 +213,7 @@ def run_batches(config_path: str, parallelism: int = 1, dry_run: bool = False):
     
     failures = 0
     with concurrent.futures.ThreadPoolExecutor(max_workers=parallelism) as executor:
-        futures = {executor.submit(run_single_job, job, dry_run): job for job in jobs}
+        futures = {executor.submit(run_single_job, job, dry_run, debug_mode): job for job in jobs}
         for future in concurrent.futures.as_completed(futures):
             success = future.result()
             if not success:
