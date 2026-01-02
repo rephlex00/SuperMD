@@ -4,6 +4,8 @@ import os
 import yaml
 from dataclasses import asdict
 from .types import ConversionMetadata
+from .utils import shorten_path
+
 
 logger = logging.getLogger(__name__)
 
@@ -48,10 +50,10 @@ def check_metadata_file(metadata_dir: str, source_file: str) -> ConversionMetada
                 source_hash = hashlib.sha1(f.read()).hexdigest()
 
             if metadata.input_hash == source_hash:
-                raise ValueError(f"Input {metadata.input_file} has NOT changed!")
+                raise ValueError(f"Input {shorten_path(metadata.input_file)} has NOT changed!")
 
             if metadata.output_hash != output_hash:
-                raise ValueError(f"Output {metadata.output_file} HAS been changed!")
+                raise ValueError(f"Output {shorten_path(metadata.output_file)} HAS been changed!")
 
             return metadata
 

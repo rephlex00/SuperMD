@@ -7,6 +7,10 @@ import os
 import posixpath
 from contextlib import contextmanager
 from datetime import datetime
+from pathlib import Path
+
+from sn2md.utils import shorten_path
+
 
 from jinja2 import Template
 from supernotelib import Notebook
@@ -24,6 +28,8 @@ from tqdm import tqdm
 logger = logging.getLogger(__name__)
 
 
+
+
 @contextmanager
 def generate_images(
     image_extractor: ImageExtractor, file_name: str, output: str
@@ -31,7 +37,7 @@ def generate_images(
     image_output_path = os.path.join(output, uuid.uuid4().hex)
     os.makedirs(image_output_path, exist_ok=True)
 
-    logger.debug("Storing images in %s", image_output_path)
+    logger.debug("Storing images in %s", shorten_path(image_output_path))
 
     try:
         yield image_extractor.extract_images(file_name, image_output_path)
@@ -47,24 +53,33 @@ def process_pages(
     prompt_context: dict | None = None,
 ) -> str:
     page_list = tqdm(pngs, desc="Processing pages", unit="page") if progress else pngs
+
     template_output = ""
     for i, page in enumerate(page_list):
         context = ""
         if i > 0 and len(template_output) > 0:
             # include the last 50 characters...for continuity of the transcription:
             context = template_output[-50:]
-        template_output = (
-            template_output
-            + "\n"
-            + image_to_markdown(
-                page,
-                context,
-                config.api_key,
-                model,
-                config.prompt,
-                prompt_context,
+        try:
+            template_output = (
+                template_output
+                + "\n"
+                + image_to_markdown(
+                    page,
+                    context,
+                    config.api_key,
+                    model,
+                    config.prompt,
+                    prompt_context,
+                )
             )
-        )
+        except KeyError as e:
+            logger.error(f"Template rendering failed. Missing key: {e}")
+            if prompt_context:
+                logger.error(f"Available context keys: {list(prompt_context.keys())}")
+            else:
+                logger.error("Prompt context is None!")
+            raise
     return template_output
 
 
@@ -215,7 +230,7 @@ def generate_output(
     output_path_and_file = os.path.join(output_path, output_filename)
     with open(output_path_and_file, "w") as f:
         _ = f.write(jinja_markdown)
-    logger.debug("Wrote output to %s", output_path_and_file)
+    logger.debug("Wrote output to %s", shorten_path(output_path_and_file))
 
     # move everything from image_output_path to the dedicated image folder:
     for png_path in pngs:
@@ -226,7 +241,7 @@ def generate_output(
     metadata_dir = os.path.join(output_path, ".meta")
     write_metadata_file(metadata_dir, file_name, output_path_and_file)
 
-    logger.debug("Moved images to %s", image_output_dir)
+    logger.debug("Moved images to %s", shorten_path(image_output_dir))
 
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     import click
@@ -255,7 +270,7 @@ def import_supernote_file_core(
     progress: bool = False,
     model: str | None = None,
 ) -> None:
-    logger.debug("import_supernote_file_core: %s", file_name)
+    logger.debug("import_supernote_file_core: %s", shorten_path(file_name))
     if not force:
         verify_metadata_file(config, output, file_name)
 
@@ -301,7 +316,7 @@ def import_supernote_directory_core(
         )
         for file in file_list:
             filename = os.path.join(root, file)
-            logger.debug(f"Scanning file: {filename}")
+            logger.debug(f"Scanning file: {shorten_path(filename)}")
             try:
                 if file.lower().endswith(".note"):
                     import_supernote_file_core(
@@ -332,4 +347,4 @@ def import_supernote_directory_core(
                         model,
                     )
             except ValueError as e:
-                logger.debug(f"Skipping {filename}: {e}")
+                logger.debug(f"Skipping {shorten_path(filename)}: {e}")

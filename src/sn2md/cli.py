@@ -22,7 +22,12 @@ logger = logging.getLogger(__name__)
 
 
 def setup_logging(level):
-    logging.basicConfig(level=level)
+    logging.basicConfig(
+        level=level,
+        format="[%(levelname)s] %(message)s",
+        force=True
+    )
+
     logger.setLevel(level)
     importer_logger.setLevel(level)
     logger.debug(f"Logging level: {level}")
