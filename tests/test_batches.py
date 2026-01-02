@@ -1,8 +1,8 @@
 
 import os
 import sys
-from sn2md_app.batches import tilde_expand, run_single_job
-from sn2md_app.config import JobConfig, JobFlags
+from sn2md.batches import tilde_expand, run_single_job
+from sn2md.job_config import JobConfig, JobFlags
 
 def test_tilde_expand():
     """Verify tilde expansion."""
@@ -66,9 +66,9 @@ def test_run_single_job_direct_execution(monkeypatch):
         pass
 
     # Mock sn2md imports in sn2md_app.batches
-    monkeypatch.setattr("sn2md_app.batches.import_supernote_directory_core", mock_core)
-    monkeypatch.setattr("sn2md_app.batches.setup_logging", mock_setup)
-    monkeypatch.setattr("sn2md_app.batches.get_config", mock_get_config)
+    monkeypatch.setattr("sn2md.batches.import_supernote_directory_core", mock_core)
+    monkeypatch.setattr("sn2md.batches.setup_logging", mock_setup)
+    monkeypatch.setattr("sn2md.batches.get_config", mock_get_config)
     
     run_single_job(job, dry_run=False, disable_progress=False)
     
@@ -100,8 +100,8 @@ def test_run_single_job_disable_progress(monkeypatch):
     def mock_core_kwargs(directory, output, config, force, progress, model):
         called_args["progress"] = progress
 
-    monkeypatch.setattr("sn2md_app.batches.import_supernote_directory_core", mock_core_kwargs)
-    monkeypatch.setattr("sn2md_app.batches.setup_logging", lambda l: None)
+    monkeypatch.setattr("sn2md.batches.import_supernote_directory_core", mock_core_kwargs)
+    monkeypatch.setattr("sn2md.batches.setup_logging", lambda l: None)
     
     # Run with disable_progress=True
     run_single_job(job, dry_run=False, disable_progress=True)

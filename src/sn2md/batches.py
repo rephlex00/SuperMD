@@ -13,7 +13,7 @@ from sn2md.importer import import_supernote_directory_core
 from sn2md.cli import setup_logging, get_config
 from sn2md.types import Config
 
-from .config import load_jobs_config, merge_defaults, JobConfig
+from .job_config import load_jobs_config, merge_defaults, JobConfig
 
 def log(msg: str, fg: str = None):
     ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")

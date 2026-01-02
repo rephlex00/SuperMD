@@ -5,8 +5,8 @@ from unittest.mock import patch
 
 from sn2md.types import ImageExtractor
 
-import supernotelib as sn
-from supernotelib.converter import ImageConverter, VisibilityOverlay
+import sn2md.supernotelib as sn
+from sn2md.supernotelib.converter import ImageConverter, VisibilityOverlay
 
 logger = logging.getLogger(__name__)
 

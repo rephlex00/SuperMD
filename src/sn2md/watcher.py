@@ -33,7 +33,7 @@ def run_watcher(config_path: str, parallelism: int = 1):
     # Setup watchdog
     # Note: We need to know which directories to watch.
     # Parsing config to find input directories
-    from .config import load_jobs_config
+    from .job_config import load_jobs_config
     try:
         batch_config = load_jobs_config(config_path)
     except Exception as e:

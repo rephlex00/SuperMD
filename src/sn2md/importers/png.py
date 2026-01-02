@@ -1,6 +1,6 @@
 import os
 import shutil
-from supernotelib import Notebook
+from sn2md.supernotelib import Notebook
 from sn2md.types import ImageExtractor
 
 
