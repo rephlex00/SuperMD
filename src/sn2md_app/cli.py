@@ -71,3 +71,6 @@ from .service import logs_service
 def logs(lines, follow):
     """Show service logs"""
     logs_service(lines=lines, follow=follow)
+
+if __name__ == "__main__":
+    main()

@@ -1,12 +1,18 @@
+
 import os
 import sys
-import subprocess
 import concurrent.futures
 import click
 import re
 from datetime import datetime
 from pathlib import Path
 from typing import List
+
+# Direct imports from sn2md
+from sn2md.importer import import_supernote_directory_core
+from sn2md.cli import setup_logging, get_config
+from sn2md.types import Config
+
 from .config import load_jobs_config, merge_defaults, JobConfig
 
 def log(msg: str, fg: str = None):
@@ -84,18 +90,10 @@ def log(msg: str, fg: str = None):
     else:
         click.echo(f"{ts_colored} {body_colored}")
         
-    # Process subsequent lines
-    # Indent them to align with body of first line (past timestamp and tag)
-    # or just past timestamp? User asked "indented properly".
-    # Aligning past timestamp defines the block. 
-    # Aligning past tag might be too much indent for generic text, but good for "Would run:" properties.
-    
     full_indent = indent_str + tag_sub_indent
     
     for line in lines[1:]:
-        # Style each line individually?
-        # Often subsequent lines are multiline values.
-        # Let's apply simple highlighting if it looks like a path/command
+        # Simple highlighting if it looks like a path/command
         stripped = line.strip()
         styled_line = line 
         if stripped.startswith("-") or stripped.startswith("/"):
@@ -110,7 +108,7 @@ def tilde_expand(path_str: str) -> str:
         return ""
     return os.path.expanduser(path_str)
 
-def run_single_job(job: JobConfig, dry_run: bool = False, debug_mode: bool = False) -> bool:
+def run_single_job(job: JobConfig, dry_run: bool = False, debug_mode: bool = False, disable_progress: bool = False) -> bool:
     log(f"[job] Starting: {job.name}")
     
     in_path = tilde_expand(job.input)
@@ -120,78 +118,56 @@ def run_single_job(job: JobConfig, dry_run: bool = False, debug_mode: bool = Fal
     if not os.path.exists(in_path):
         log(f"Error: Input path not found: {in_path}")
         return False
-        
-    # Construct arguments for sn2md
-    # Note: Click group options (--output, --level, --model, etc.) must come BEFORE the subcommand (directory)
-    cmd = [sys.executable, "-m", "sn2md"]
-    
-    # Add group options first
-    if cfg_path:
-        cmd.extend(["-c", cfg_path])
-    
-    # Flags (override config if needed or if config missing)
-    # Even if config exists, we might want to override debug level
-    if debug_mode:
-        cmd.extend(["-l", "DEBUG"])
-    elif not cfg_path:
-        cmd.extend(["-l", job.flags.level])
 
-    if not cfg_path:
-        cmd.extend(["-m", job.flags.model])
-        if job.flags.force:
-            cmd.append("--force")
-        if job.flags.progress:
-            cmd.append("--progress")
-        else:
-            cmd.append("--no-progress")
-            
-    # Add output flag (it's a group option too)
-    cmd.extend(["-o", out_path])
-    
-    # Add subcommand and arguments
-    cmd.append("directory")
-    cmd.append(in_path)
-    
-    cmd.extend(job.extra_args)
-    
-    # Environment variables
-    env = os.environ.copy()
-    env["PYTHONPATH"] = str(Path(__file__).parent.parent) # Ensure src/ is in path
-    
-    if job.env_file:
-        env_file = tilde_expand(job.env_file)
-        if os.path.exists(env_file):
-            # Simple env file parsing
-            with open(env_file) as f:
-                for line in f:
-                    if "=" in line and not line.strip().startswith("#"):
-                        key, val = line.strip().split("=", 1)
-                        env[key] = val
+    # Determine logging level
+    level = "DEBUG" if debug_mode else job.flags.level
 
     if dry_run:
-        # Format command nicely for readability
-        # Just putting args on separate lines if it's long?
-        # Or just break it a bit.
-        cmd_pretty = " ".join(cmd)
-        if len(cmd_pretty) > 80:
-             # Basic wrapping/formatting
-             # Split on major flags?
-             cmd_pretty = " ".join(cmd).replace(" -", "\n-")
-             
-        log(f"[dry-run] Would run:\n{cmd_pretty}")
+        log(f"[dry-run] Would run conversion:")
         log(f"[dry-run] Input: {in_path}")
         log(f"[dry-run] Output: {out_path}")
+        log(f"[dry-run] Config: {cfg_path if cfg_path else 'Defaults'}")
+        log(f"[dry-run] Level: {level}")
+        log(f"[dry-run] Model: {job.flags.model}")
+        log(f"[dry-run] Force: {job.flags.force}")
         return True
         
+    setup_logging(level)
+
+    # Prepare configuration object
+    if cfg_path:
+        config = get_config(cfg_path)
+    else:
+        config = Config()
+
+    # Determine progress bar state
+    progress = False if disable_progress else job.flags.progress
+    
+    # Load env file if specified
+    if job.env_file:
+         env_path = tilde_expand(job.env_file)
+         if os.path.exists(env_path):
+             # Basic .env parsing manually since we are in the same process
+             # python-dotenv is better but let's stick to what we had or simple parsing
+             with open(env_path) as f:
+                for line in f:
+                    line = line.strip()
+                    if line and not line.startswith("#") and "=" in line:
+                        k, v = line.split("=", 1)
+                        os.environ[k] = v
+
     try:
-        # Run subprocess
-        result = subprocess.run(cmd, env=env, check=False)
-        if result.returncode == 0:
-            log(f"[job {job.name}] SUCCESS")
-            return True
-        else:
-            log(f"[job {job.name}] FAILED (exit code {result.returncode})")
-            return False
+        import_supernote_directory_core(
+            directory=in_path,
+            output=out_path,
+            config=config,
+            force=job.flags.force,
+            progress=progress,
+            model=job.flags.model
+        )
+        
+        log(f"[job {job.name}] SUCCESS")
+        return True
     except Exception as e:
         log(f"[job {job.name}] FAILED (exception: {e})")
         return False
@@ -210,10 +186,18 @@ def run_batches(config_path: str, parallelism: int = 1, dry_run: bool = False, d
         
     total = len(jobs)
     log(f"sn2md-cli: jobs={total} parallel={parallelism} config={config_path}")
+
+    
+    # Disable progress bars if running in parallel to avoid output corruption
+    disable_progress = parallelism > 1
     
     failures = 0
     with concurrent.futures.ThreadPoolExecutor(max_workers=parallelism) as executor:
-        futures = {executor.submit(run_single_job, job, dry_run, debug_mode): job for job in jobs}
+        futures = {
+            executor.submit(run_single_job, job, dry_run, debug_mode, disable_progress): job 
+            for job in jobs
+        }
+        
         for future in concurrent.futures.as_completed(futures):
             success = future.result()
             if not success:
