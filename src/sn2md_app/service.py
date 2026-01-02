@@ -103,9 +103,24 @@ def install_service(config_path: str = "jobs.yaml", dry_run: bool = False):
         f.write(plist)
     
     print(f"Service installed to: {dest_path}")
-    print("To start the service, run:")
-    print("  launchctl unload ~/Library/LaunchAgents/com.sn2md.watch.plist 2>/dev/null")
-    print("  launchctl load ~/Library/LaunchAgents/com.sn2md.watch.plist")
+
+    # Auto-load the service
+    try:
+        # Unload first just in case (ignore errors)
+        subprocess.run(
+            ["launchctl", "unload", dest_path], 
+            check=False, 
+            stdout=subprocess.DEVNULL, 
+            stderr=subprocess.DEVNULL
+        )
+        
+        # Load
+        subprocess.run(["launchctl", "load", dest_path], check=True)
+        print("Service started successfully.")
+    except subprocess.CalledProcessError as e:
+        print(f"Error starting service: {e}")
+        print("You may need to run manually:")
+        print(f"  launchctl load {dest_path}")
     
 def uninstall_service():
     dest_path = os.path.expanduser("~/Library/LaunchAgents/com.sn2md.watch.plist")
@@ -151,3 +166,63 @@ def status_service():
             
     except Exception as e:
         print(f"Error checking status: {e}")
+
+def start_service():
+    dest_path = os.path.expanduser("~/Library/LaunchAgents/com.sn2md.watch.plist")
+    if not os.path.exists(dest_path):
+        print(f"Service plist not found at: {dest_path}")
+        print("Please run 'sn2md-cli service install' first.")
+        return
+
+    try:
+        # Try to load
+        subprocess.run(["launchctl", "load", dest_path], check=True, stderr=subprocess.PIPE, text=True)
+        print("Service started successfully.")
+    except subprocess.CalledProcessError as e:
+        if "service already loaded" in e.stderr.lower():
+             print("Service is already running.")
+        else:
+             print(f"Error starting service: {e.stderr.strip()}")
+
+def stop_service():
+    dest_path = os.path.expanduser("~/Library/LaunchAgents/com.sn2md.watch.plist")
+    
+    # We can try to unload even if plist is missing if we know the label, 
+    # but launchctl unload typically assumes the plist path for user agents.
+    # If the plist is gone, we technically can't unload by path easily in the same way 
+    # (though 'bootout' is the modern way, 'unload' is legacy).
+    # Sticking to unloading via plist path.
+    
+    if not os.path.exists(dest_path):
+        print(f"Service plist not found at: {dest_path}")
+        return
+
+    try:
+        subprocess.run(["launchctl", "unload", dest_path], check=True, stderr=subprocess.PIPE, text=True)
+        print("Service stopped.")
+    except subprocess.CalledProcessError as e:
+        if "Could not find specified service" in e.stderr:
+             print("Service was not running.")
+        else:
+             print(f"Error stopping service: {e.stderr.strip()}")
+
+def logs_service(lines: int = 10, follow: bool = False):
+    log_path = os.path.expanduser("~/Library/Logs/sn2md-watch.log")
+    
+    if not os.path.exists(log_path):
+        print(f"Log file not found at: {log_path}")
+        return
+
+    cmd = ["tail", "-n", str(lines)]
+    if follow:
+        cmd.append("-f")
+    
+    cmd.append(log_path)
+    
+    try:
+        # Use simple subprocess call. For -f (follow), this will block until user interrupts.
+        subprocess.run(cmd, check=False)
+    except KeyboardInterrupt:
+        pass
+    except Exception as e:
+        print(f"Error reading logs: {e}")

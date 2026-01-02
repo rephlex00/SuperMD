@@ -301,6 +301,7 @@ def import_supernote_directory_core(
         )
         for file in file_list:
             filename = os.path.join(root, file)
+            logger.debug(f"Scanning file: {filename}")
             try:
                 if file.lower().endswith(".note"):
                     import_supernote_file_core(

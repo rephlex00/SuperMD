@@ -27,6 +27,7 @@ def setup_logging(level):
     importer_logger.setLevel(level)
     logger.debug(f"Logging level: {level}")
 
+
     # Suppress PIL debugging
     pil_logger = logging.getLogger('PIL.PngImagePlugin')
     pil_logger.setLevel(logging.WARNING)
@@ -94,6 +95,7 @@ def cli(ctx, config, output, force, progress, level, model):
     ctx.obj["model"] = model
     ctx.obj["progress"] = progress
     setup_logging(level)
+
 
 
 @cli.command(name="file", help="""
