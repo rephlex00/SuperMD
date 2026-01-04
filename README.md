@@ -107,9 +107,17 @@ Run the application in a container to avoid dependency issues.
 4. **View logs**:
    ```bash
    docker-compose logs -f
+   docker-compose logs -f
    ```
 
-## Troubleshooting
+5. **Permission Management (Linux)**:
+   If you encounter permission issues on Linux, you can set the `PUID` and `PGID` environment variables to match your host user's IDs (usually 1000).
+   In `docker-compose.yml`:
+   ```yaml
+   environment:
+     - PUID=1000
+     - PGID=1000
+   ```
 
 - **Command not found**: Ensure your virtual environment is activated (`source .venv/bin/activate`).
 - **ModuleNotFoundError**: If running from source, ensure you installed with `pip install -e .`.

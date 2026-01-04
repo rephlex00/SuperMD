@@ -2,6 +2,7 @@
 defaults:
   input: ${SN2MD_DEFAULT_INPUT}
   output: ${SN2MD_DEFAULT_OUTPUT}
+  config: /app/config/settings.toml
   flags:
     level: INFO
     progress: false  # Less noise in logs

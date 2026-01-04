@@ -16,6 +16,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     tcl-dev \
     libharfbuzz-dev \
     libfribidi-dev \
+    gosu \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -23,19 +24,25 @@ WORKDIR /app
 # Copy project files
 COPY pyproject.toml README.md ./
 COPY src/ ./src/
-COPY config/docker-jobs.yaml ./config/docker-jobs.yaml
+COPY config/ ./config/
+COPY entrypoint.sh /usr/local/bin/entrypoint.sh
 
 # Install the application
 RUN pip install --no-cache-dir .
 
 # Create directory structure for mounts
-RUN mkdir -p /data/in /data/out /config
+RUN mkdir -p /data/in /data/out /config && \
+    chmod +x /usr/local/bin/entrypoint.sh
 
 # Set environment variables
 ENV SN2MD_DEFAULT_INPUT=/data/in
 ENV SN2MD_DEFAULT_OUTPUT=/data/out
 ENV PYTHONUNBUFFERED=1
+ENV OPENAI_API_KEY=""
+ENV OPENAI_MODEL="gpt-4o-mini"
+ENV PUID=1000
+ENV PGID=1000
 
 # Default command
-ENTRYPOINT ["sn2md-cli"]
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
 CMD ["watch", "--config", "/app/config/docker-jobs.yaml", "--jobs", "1"]
