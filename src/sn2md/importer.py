@@ -21,7 +21,12 @@ from sn2md.importers.pdf import PDFExtractor
 from sn2md.importers.png import PNGExtractor
 from sn2md.types import Config, ImageExtractor
 from sn2md.importers.note import NotebookExtractor, convert_binary_to_image
-from sn2md.metadata import check_metadata_file, write_metadata_file
+from sn2md.metadata import (
+    check_metadata_file, 
+    write_metadata_file,
+    InputNotChangedError,
+    OutputChangedError
+)
 
 from tqdm import tqdm
 
@@ -346,5 +351,11 @@ def import_supernote_directory_core(
                         progress,
                         model,
                     )
+            except InputNotChangedError:
+                logger.debug(f"Skipping {shorten_path(filename)}: Input not changed")
+            except OutputChangedError as e:
+                import click
+                tqdm.write(click.style(f"Refusing to update {shorten_path(filename)}: Output file has been modified locally. Use --force to overwrite.", fg="yellow"))
+                logger.warning(f"Skipping {shorten_path(filename)}: {e}")
             except ValueError as e:
                 logger.debug(f"Skipping {shorten_path(filename)}: {e}")

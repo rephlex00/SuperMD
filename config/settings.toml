@@ -78,6 +78,7 @@ date: {{year_month_day}}
 type: supernote
 notefile: {{file_basename}}.note
 coverimage: attachments/{{images[0].name}}
+ignoresnlock: false
 tags:
 ---
 {{llm_output}}
