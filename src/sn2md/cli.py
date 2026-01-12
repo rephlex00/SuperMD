@@ -17,6 +17,7 @@ from .importer import (
 )
 from .importers.note import NotebookExtractor
 from .types import Config
+from .metadata import InputNotChangedError, OutputChangedError
 
 logger = logging.getLogger(__name__)
 
@@ -128,6 +129,11 @@ def import_supernote_file(ctx, filename: str) -> None:
         else:
             print("Unsupported file format")
             sys.exit(1)
+    except InputNotChangedError:
+        logger.info(f"Skipping {filename}: Input not changed")
+    except OutputChangedError as e:
+        print(click.style(f"Refusing to update {filename}: Output file has been modified locally. Use --force to overwrite.", fg="yellow"))
+        logger.warning(f"Skipping {filename}: {e}")
     except ValueError as e:
         print(e)
         sys.exit(1)
