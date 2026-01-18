@@ -1,2 +1,0 @@
-[console_scripts]
-sn2md-cli = sn2md.cli:cli
