@@ -236,7 +236,7 @@ def list_meta(config, verbose):
                     # input_basename -> /full/path/to/markdown.md [Status]
                     print(f"    {entry.input_note_filename} -> {full_output_path} [{' | '.join(status_parts)}]")
         else:
-             print(click.style("  Tracked: None", fg="dim"))
+             print(click.style("  Tracked: None", dim=True))
 
         # 2. Analyze Untracked Files
         untracked = []
