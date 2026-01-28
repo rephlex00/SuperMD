@@ -159,7 +159,8 @@ def run_single_job(job: JobConfig, dry_run: bool = False, debug_mode: bool = Fal
             force=job.flags.force,
             progress=progress,
             model=job.flags.model,
-            dry_run=dry_run
+            dry_run=dry_run,
+            cooldown=job.flags.cooldown
         )
         
         log(f"[job {job.name}] SUCCESS")
@@ -200,7 +201,7 @@ def run_batches(config_path: str, parallelism: int = 1, dry_run: bool = False, d
         log(f"      Output: {job.output}")
         # Only log flags that differ from defaults or are interesting? 
         # For now, just logging key flags for clarity
-        log(f"      Process: force={job.flags.force} model={job.flags.model}")
+        log(f"      Process: force={job.flags.force} model={job.flags.model} cooldown={job.flags.cooldown}s")
 
     
     # Disable progress bars if running in parallel to avoid output corruption

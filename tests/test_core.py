@@ -143,3 +143,51 @@ def test_generate_output(mock_rename, mock_makedirs, mock_file, mock_hash, mock_
     
     # Verify metadata update
     mock_manager.upsert_entry.assert_called()
+
+@patch("os.path.exists")
+def test_verify_metadata_file_reprocess_broken(mock_exists):
+    """Test that a missing output file triggers reprocessing even if input hash matches."""
+    from sn2md.importer import verify_metadata_file
+    from sn2md.metadata_db import InputNotChangedError
+    
+    mock_manager = MagicMock()
+    mock_entry = MagicMock()
+    mock_entry.input_file_hash = "same_hash"
+    mock_entry.actual_file_path = "/path/to/missing_output.md"
+    
+    mock_manager.get_entry_by_input.return_value = mock_entry
+    
+    # Scene: 
+    # 1. Entry exists
+    # 2. Output file DOES NOT exist
+    # 3. Input hash matches
+    
+    def side_effect(path):
+        if path == "/path/to/missing_output.md":
+            return False
+        return True
+    mock_exists.side_effect = side_effect
+    
+    # Should NOT raise InputNotChangedError
+    verify_metadata_file(mock_manager, "test.note", "same_hash")
+    
+    # Ensure we checked validity
+    mock_exists.assert_called_with("/path/to/missing_output.md")
+
+@patch("sn2md.importer.image_to_markdown", return_value="content")
+@patch("time.sleep")
+def test_process_pages_cooldown(mock_sleep, mock_i2m, mock_config):
+    """Test that cooldown sleep is called correct number of times."""
+    from sn2md.importer import process_pages
+    
+    pngs = ["1.png", "2.png", "3.png"]
+    process_pages(pngs, mock_config, "model", progress=False, cooldown=0.1)
+    
+    # Should sleep for 2nd and 3rd page (2 times total)
+    assert mock_sleep.call_count == 2
+    mock_sleep.assert_called_with(0.1)
+    
+    # Test with cooldown 0
+    mock_sleep.reset_mock()
+    process_pages(pngs, mock_config, "model", progress=False, cooldown=0.0)
+    mock_sleep.assert_not_called()

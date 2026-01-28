@@ -120,13 +120,13 @@ def import_supernote_file(ctx, filename: str) -> None:
     model = ctx.obj["model"]
     try:
         if filename.lower().endswith(".note"):
-            import_supernote_file_core(NotebookExtractor(), filename, output, config, force, progress, model)
+            import_supernote_file_core(NotebookExtractor(), filename, output, config, force, progress, model, cooldown=5.0)
         elif filename.lower().endswith(".pdf"):
-            import_supernote_file_core(PDFExtractor(), filename, output, config, force, progress, model)
+            import_supernote_file_core(PDFExtractor(), filename, output, config, force, progress, model, cooldown=5.0)
         elif filename.lower().endswith(".png"):
-            import_supernote_file_core(PNGExtractor(), filename, output, config, force, progress, model)
+            import_supernote_file_core(PNGExtractor(), filename, output, config, force, progress, model, cooldown=5.0)
         elif filename.lower().endswith(".spd"):
-            import_supernote_file_core(AtelierExtractor(), filename, output, config, force, progress, model)
+            import_supernote_file_core(AtelierExtractor(), filename, output, config, force, progress, model, cooldown=5.0)
         else:
             print("Unsupported file format")
             sys.exit(1)
@@ -153,7 +153,7 @@ def import_supernote_directory(ctx, directory: str) -> None:
     force = ctx.obj["force"]
     progress = ctx.obj["progress"]
     model = ctx.obj["model"]
-    import_supernote_directory_core(directory, output, config, force, progress, model)
+    import_supernote_directory_core(directory, output, config, force, progress, model, cooldown=5.0)
 
 @cli.command()
 @click.option("--config", default="config/jobs.local.yaml", help="Path to jobs.yaml config file")
@@ -219,6 +219,10 @@ def list_meta(config, verbose):
                     status_parts.append(click.style("Locked", fg="yellow"))
                 else:
                     status_parts.append(click.style("Active", fg="green"))
+                
+                # Check for broken link
+                if entry.actual_file_path and not os.path.exists(entry.actual_file_path):
+                     status_parts.append(click.style("Broken", fg="red", bold=True))
                 
                 # Format Output
                 # Base output: input -> FULL output path
