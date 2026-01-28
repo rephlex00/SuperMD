@@ -10,6 +10,7 @@ class JobFlags(BaseModel):
     level: str = "INFO"
     force: bool = False
     progress: bool = True
+    cooldown: float = 5.0
 
 class JobConfig(BaseModel):
     name: str = "unnamed"

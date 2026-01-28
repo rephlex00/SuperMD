@@ -53,11 +53,15 @@ def process_pages(
     model: str,
     progress: bool,
     prompt_context: dict | None = None,
+    cooldown: float = 0.0,
 ) -> str:
+    from time import sleep
     page_list = tqdm(pngs, desc="Processing pages", unit="page") if progress else pngs
 
     template_output = ""
     for i, page in enumerate(page_list):
+        if i > 0 and cooldown > 0:
+            sleep(cooldown) # Cooldown between calls
         context = ""
         if i > 0 and len(template_output) > 0:
             # include the last 50 characters...for continuity of the transcription:
@@ -308,16 +312,18 @@ def verify_metadata_file(
     if not entry:
         return # New file
 
-    if entry.input_file_hash == input_hash:
-        raise InputNotChangedError(f"Input {shorten_path(file_name)} has NOT changed!")
-
-    # Input changed, check output
-    # If actual_file_path is None or file doesn't exist, regenerate
+    # 1. Check if output is missing (Broken link) -> Reprocess
     if not entry.actual_file_path or not os.path.exists(entry.actual_file_path):
         if dry_run:
              import click
              tqdm.write(click.style(f"  [dry-run] Output file missing for {file_basename}", fg="blue"))
+        else:
+             logger.info(f"Output file missing for {file_basename}, forcing reprocessing.")
         return 
+
+    # 2. Check if input has changed
+    if entry.input_file_hash == input_hash:
+        raise InputNotChangedError(f"Input {shorten_path(file_name)} has NOT changed!") 
 
     # Check if output has changed
     current_output_hash = compute_file_hash(entry.actual_file_path)
@@ -353,6 +359,7 @@ def import_supernote_file_core(
     model: str | None = None,
     dry_run: bool = False,
     metadata_manager: MetadataManager | None = None,
+    cooldown: float = 0.0,
 ) -> None:
     logger.debug("import_supernote_file_core: %s", shorten_path(file_name))
     
@@ -413,6 +420,7 @@ def import_supernote_file_core(
                 model,
                 progress,
                 basic_context,
+                cooldown=cooldown,
             )
 
             notebook = image_extractor.get_notebook(file_name)
@@ -451,6 +459,7 @@ def import_supernote_directory_core(
     progress: bool = False,
     model: str | None = None,
     dry_run: bool = False,
+    cooldown: float = 0.0,
 ) -> None:
     metadata_manager = MetadataManager(output)
     try:
@@ -482,7 +491,8 @@ def import_supernote_directory_core(
                             progress,
                             model,
                             dry_run,
-                            metadata_manager=metadata_manager
+                            metadata_manager=metadata_manager,
+                            cooldown=cooldown
                         )
                 except InputNotChangedError:
                     if dry_run:

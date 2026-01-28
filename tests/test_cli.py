@@ -69,9 +69,22 @@ def test_cli_meta_list(mock_manager_cls, runner):
     """Test 'meta list' command."""
     mock_manager = mock_manager_cls.return_value
     # The CLI calls get_all_entries(), not list()
-    mock_manager.get_all_entries.return_value = []
-    result = runner.invoke(cli, ["meta", "list"])
-    assert result.exit_code == 0
+    mock_entry = MagicMock()
+    mock_entry.input_note_filename = "test.note"
+    mock_entry.actual_file_path = "/path/to/test.md"
+    mock_entry.is_locked = False
+    mock_entry.image_files = [] # avoid len() error or similar
+    
+    mock_manager.get_all_entries.return_value = [mock_entry]
+    
+    with patch("os.path.exists") as mock_exists:
+        # Simulate output file missing
+        mock_exists.side_effect = lambda p: p != "/path/to/test.md"
+        
+        result = runner.invoke(cli, ["meta", "list"])
+        assert result.exit_code == 0
+        assert "Broken" in result.output
+    
     mock_manager.get_all_entries.assert_called()
 
 @patch("sn2md.importer.rebuild_metadata_directory")
