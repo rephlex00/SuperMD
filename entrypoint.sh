@@ -58,7 +58,7 @@ if [ "$1" = "watch" ]; then
 fi
 
 # Pass through other commands
-if [ "$1" = "run" ] || [ "$1" = "file" ] || [ "$1" = "directory" ] || [ "$1" = "rebuild-meta" ] || [ "$1" = "clean-meta" ] || [ "${1:0:1}" = "-" ]; then
+if [ "$1" = "run" ] || [ "$1" = "file" ] || [ "$1" = "directory" ] || [ "$1" = "rebuild-meta" ] || [ "$1" = "clean-meta" ] || [ "$1" = "meta" ] || [ "${1:0:1}" = "-" ]; then
     exec gosu sn2md sn2md-cli "$@"
 fi
 

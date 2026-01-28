@@ -8,22 +8,18 @@ import posixpath
 from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
-
-from sn2md.utils import shorten_path
-
-
 from jinja2 import Template
-from sn2md.supernotelib import Notebook
 
-from sn2md.ai_utils import image_to_markdown, image_to_text
-from sn2md.importers.atelier import AtelierExtractor
+from sn2md.types import Config, ImageExtractor
+from sn2md.supernotelib import Notebook
+from sn2md.importers.note import NotebookExtractor, convert_binary_to_image
 from sn2md.importers.pdf import PDFExtractor
 from sn2md.importers.png import PNGExtractor
-from sn2md.types import Config, ImageExtractor
-from sn2md.importers.note import NotebookExtractor, convert_binary_to_image
-from sn2md.metadata import (
-    check_metadata_file, 
-    write_metadata_file,
+from sn2md.importers.atelier import AtelierExtractor
+from sn2md.ai_utils import image_to_markdown, image_to_text
+from sn2md.utils import shorten_path, compute_file_hash
+from sn2md.metadata_db import (
+    MetadataManager,
     InputNotChangedError,
     OutputChangedError
 )
@@ -233,6 +229,8 @@ def generate_output(
     file_name: str,
     output: str,
     template,
+    metadata_manager: MetadataManager,
+    input_hash: str,
 ) -> None:
     jinja_markdown = template.render(context)
 
@@ -261,15 +259,36 @@ def generate_output(
     logger.debug("Wrote output to %s", shorten_path(output_path_and_file))
 
     # move everything from image_output_path to the dedicated image folder:
+    image_files = []
     for png_path in pngs:
         png_name = os.path.basename(png_path)
         destination = os.path.join(image_output_dir, png_name)
-        os.rename(png_path, destination)
-
-    metadata_dir = os.path.join(output_path, ".meta")
-    write_metadata_file(metadata_dir, file_name, output_path_and_file)
+        shutil.move(png_path, destination)
+        image_files.append(png_name)
 
     logger.debug("Moved images to %s", shorten_path(image_output_dir))
+
+    # Update metadata
+    output_hash = compute_file_hash(output_path_and_file)
+    import json
+    
+    # expected_path is relative to output root? Or just unique?
+    # The requirement says: expected path based on settings.toml path config, excluding root.
+    # We calculated `output_path` (relative) and `output_filename`.
+    output_path_template_original = Template(config.output_path_template)
+    rel_path_dir = output_path_template_original.render(context)
+    expected_rel_path = os.path.join(rel_path_dir, output_filename)
+
+    metadata_manager.upsert_entry(
+        input_note_filename=os.path.basename(file_name),
+        output_markdown_filename=output_filename,
+        expected_path=expected_rel_path,
+        actual_file_path=output_path_and_file,
+        input_file_hash=input_hash,
+        output_file_hash=output_hash,
+        is_locked=False,
+        image_files=json.dumps(image_files)
+    )
 
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     import click
@@ -277,17 +296,51 @@ def generate_output(
     tqdm.write(click.style(msg, fg="green"))
 
 
-def verify_metadata_file(config: Config, output: str, file_name: str, dry_run: bool = False) -> None:
-    file_basename = os.path.splitext(os.path.basename(file_name))[0]
-    basic_context = create_basic_context(file_basename, file_name)
+def verify_metadata_file(
+    metadata_manager: MetadataManager,
+    file_name: str,
+    input_hash: str,
+    dry_run: bool = False
+) -> None:
+    file_basename = os.path.basename(file_name)
+    entry = metadata_manager.get_entry_by_input(file_basename)
+    
+    if not entry:
+        return # New file
 
-    output_path_template = Template(config.output_path_template)
-    output_path = output_path_template.render(basic_context)
-    output_path = os.path.join(output, output_path)
+    if entry.input_file_hash == input_hash:
+        raise InputNotChangedError(f"Input {shorten_path(file_name)} has NOT changed!")
 
-    metadata_dir = os.path.join(output_path, ".meta")
-    logger.info(f"Checking metadata for {file_basename} in {metadata_dir}")
-    check_metadata_file(metadata_dir, file_name, dry_run=dry_run)
+    # Input changed, check output
+    # If actual_file_path is None or file doesn't exist, regenerate
+    if not entry.actual_file_path or not os.path.exists(entry.actual_file_path):
+        if dry_run:
+             import click
+             tqdm.write(click.style(f"  [dry-run] Output file missing for {file_basename}", fg="blue"))
+        return 
+
+    # Check if output has changed
+    current_output_hash = compute_file_hash(entry.actual_file_path)
+    if entry.output_file_hash == current_output_hash:
+        # Before returning, we should probably clean up old images? 
+        # The logic says: "delete the previous images in the attachments folders"
+        # We can act on this here or let the generator overwrite? 
+        # Generator creates new uuid folder then moves. 
+        # But we need to delete OLD images to avoid orphans.
+        # We can access entry.image_files
+        return # Output safe to overwrite
+
+    # Output changed, check for ignoreSNLock
+    try:
+        with open(entry.actual_file_path, "r", encoding="utf-8", errors="ignore") as f:
+            content = f.read()
+            import re
+            if re.search(r"^ignoresnlock:\s*true", content, re.MULTILINE | re.IGNORECASE):
+                return # User opted out
+    except Exception:
+        pass
+
+    raise OutputChangedError(f"Output {shorten_path(entry.actual_file_path)} HAS been changed!")
 
 
 def import_supernote_file_core(
@@ -299,44 +352,95 @@ def import_supernote_file_core(
     progress: bool = False,
     model: str | None = None,
     dry_run: bool = False,
+    metadata_manager: MetadataManager | None = None,
 ) -> None:
     logger.debug("import_supernote_file_core: %s", shorten_path(file_name))
     
-    # Verification (raises exception if unchanged/locked)
-    if not force:
-        verify_metadata_file(config, output, file_name, dry_run=dry_run)
+    should_close_manager = False
+    if metadata_manager is None:
+        metadata_manager = MetadataManager(output)
+        should_close_manager = True
 
-    if dry_run:
-        import click
-        tqdm.write(click.style(f"[dry-run] Would process {shorten_path(file_name)}", fg="green"))
-        return
+    try:
+        if not os.path.exists(file_name):
+            logger.error(f"File not found: {file_name}")
+            return
 
-    model = model if model else config.model
-    template = Template(config.template)
-    file_basename = os.path.splitext(os.path.basename(file_name))[0]
-    basic_context = create_basic_context(file_basename, file_name)
+        input_hash = compute_file_hash(file_name)
 
-    with generate_images(image_extractor, file_name, output) as pngs:
-        template_output = process_pages(
-            pngs,
-            config,
-            model,
-            progress,
-            basic_context,
-        )
+        # Verification (raises exception if unchanged/locked)
+        if not force:
+            verify_metadata_file(metadata_manager, file_name, input_hash, dry_run=dry_run)
 
-        notebook = image_extractor.get_notebook(file_name)
-        context = create_context(
-            notebook,
-            pngs,
-            config,
-            file_name,
-            model,
-            template_output,
-            basic_context,
-        )
+        if dry_run:
+            import click
+            tqdm.write(click.style(f"[dry-run] Would process {shorten_path(file_name)}", fg="green"))
+            return
 
-        generate_output(pngs, config, context, file_name, output, template)
+        # Prepare for processing
+        # If we are reprocessing, we should check invalid/old images and delete them?
+        # The prompt said: "delete the previous images in the attachments folders"
+        # We can implement this helper
+        try:
+             entry = metadata_manager.get_entry_by_input(os.path.basename(file_name))
+             if entry and entry.image_files:
+                 import json
+                 try:
+                     old_images = json.loads(entry.image_files) if entry.image_files.startswith("[") else entry.image_files.split(",")
+                     # Need to know where they are. They are in 'attachments' relative to output file dir. 
+                     # Or we can just rely on 'actual_file_path' dir.
+                     if entry.actual_file_path:
+                         parent_dir = os.path.dirname(entry.actual_file_path)
+                         attach_dir = os.path.join(parent_dir, "attachments")
+                         for img in old_images:
+                             img_path = os.path.join(attach_dir, img.strip())
+                             if os.path.exists(img_path):
+                                 os.remove(img_path)
+                 except Exception as e:
+                     logger.warning(f"Failed to cleanup old images: {e}")
+        except Exception:
+             pass
+
+        model = model if model else config.model
+        template = Template(config.template)
+        file_basename = os.path.splitext(os.path.basename(file_name))[0]
+        basic_context = create_basic_context(file_basename, file_name)
+
+        with generate_images(image_extractor, file_name, output) as pngs:
+            template_output = process_pages(
+                pngs,
+                config,
+                model,
+                progress,
+                basic_context,
+            )
+
+            notebook = image_extractor.get_notebook(file_name)
+            context = create_context(
+                notebook,
+                pngs,
+                config,
+                file_name,
+                model,
+                template_output,
+                basic_context,
+            )
+
+            generate_output(
+                pngs, 
+                config, 
+                context, 
+                file_name, 
+                output, 
+                template,
+                metadata_manager,
+                input_hash
+            )
+
+    finally:
+        if should_close_manager:
+            metadata_manager.close()
+
 
 
 def import_supernote_directory_core(
@@ -348,62 +452,65 @@ def import_supernote_directory_core(
     model: str | None = None,
     dry_run: bool = False,
 ) -> None:
-    for root, _, files in os.walk(directory):
-        file_list = (
-            tqdm(files, desc="Processing files", unit="file") if progress else files
-        )
-        for file in file_list:
-            filename = os.path.join(root, file)
-            logger.debug(f"Scanning file: {shorten_path(filename)}")
-            try:
-                if file.lower().endswith(".note"):
-                    import_supernote_file_core(
-                        NotebookExtractor(),
-                        filename,
-                        output,
-                        config,
-                        force,
-                        progress,
-                        model,
-                        dry_run
-                    )
-                if file.lower().endswith(".pdf"):
-                    import_supernote_file_core(
-                        PDFExtractor(), filename, output, config, force, progress, model, dry_run
-                    )
-                if file.lower().endswith(".png"):
-                    import_supernote_file_core(
-                        PNGExtractor(), filename, output, config, force, progress, model, dry_run
-                    )
-                if file.lower().endswith(".spd"):
-                    import_supernote_file_core(
-                        AtelierExtractor(),
-                        filename,
-                        output,
-                        config,
-                        force,
-                        progress,
-                        model,
-                        dry_run
-                    )
-            except InputNotChangedError:
-                if dry_run:
-                     import click
-                     tqdm.write(click.style(f"[dry-run] Would skip {shorten_path(filename)} (Unchanged)", fg="yellow"))
-                else:
-                     logger.debug(f"Skipping {shorten_path(filename)}: Input not changed")
-            except OutputChangedError as e:
-                import click
-                if dry_run:
-                     tqdm.write(click.style(f"[dry-run] Would skip {shorten_path(filename)} (Output modified)", fg="red"))
-                else:
-                     tqdm.write(click.style(f"Refusing to update {shorten_path(filename)}: Output file has been modified locally. Use --force to overwrite.", fg="yellow"))
-                     logger.warning(f"Skipping {shorten_path(filename)}: {e}")
-            except ValueError as e:
-                logger.exception(f"Skipping {shorten_path(filename)}: {e}")
+    metadata_manager = MetadataManager(output)
+    try:
+        for root, _, files in os.walk(directory):
+            file_list = (
+                tqdm(files, desc="Processing files", unit="file") if progress else files
+            )
+            for file in file_list:
+                filename = os.path.join(root, file)
+                logger.debug(f"Scanning file: {shorten_path(filename)}")
+                try:
+                    extractor = None
+                    if file.lower().endswith(".note"):
+                        extractor = NotebookExtractor()
+                    elif file.lower().endswith(".pdf"):
+                        extractor = PDFExtractor()
+                    elif file.lower().endswith(".png"):
+                        extractor = PNGExtractor()
+                    elif file.lower().endswith(".spd"):
+                        extractor = AtelierExtractor()
+                    
+                    if extractor:
+                        import_supernote_file_core(
+                            extractor,
+                            filename,
+                            output,
+                            config,
+                            force,
+                            progress,
+                            model,
+                            dry_run,
+                            metadata_manager=metadata_manager
+                        )
+                except InputNotChangedError:
+                    if dry_run:
+                        import click
+                        tqdm.write(click.style(f"[dry-run] Would skip {shorten_path(filename)} (Unchanged)", fg="yellow"))
+                    else:
+                        logger.debug(f"Skipping {shorten_path(filename)}: Input not changed")
+                except OutputChangedError as e:
+                    import click
+                    if dry_run:
+                        tqdm.write(click.style(f"[dry-run] Would skip {shorten_path(filename)} (Output modified)", fg="red"))
+                    else:
+                        tqdm.write(click.style(f"Refusing to update {shorten_path(filename)}: Output file has been modified locally. Use --force to overwrite.", fg="yellow"))
+                        logger.warning(f"Skipping {shorten_path(filename)}: {e}")
+                except ValueError as e:
+                    logger.exception(f"Skipping {shorten_path(filename)}: {e}")
+    finally:
+        metadata_manager.close()
 
 
-def rebuild_metadata_for_file(file_name: str, config: Config, output_dir: str, dry_run: bool = False) -> None:
+
+def rebuild_metadata_for_file(
+    file_name: str, 
+    config: Config, 
+    output_dir: str, 
+    metadata_manager: MetadataManager,
+    dry_run: bool = False
+) -> None:
     logger.debug(f"Rebuild check for {shorten_path(file_name)}")
     
     file_basename = os.path.splitext(os.path.basename(file_name))[0]
@@ -423,21 +530,41 @@ def rebuild_metadata_for_file(file_name: str, config: Config, output_dir: str, d
 
     output_file_path = os.path.join(full_output_dir, output_filename)
     
-    # Debug logging for troubleshooting path issues
-    # logger.debug(f"Checking for existing output: {shorten_path(output_file_path)}")
-    
     if os.path.exists(output_file_path):
         if dry_run:
             tqdm.write(click.style(f"[dry-run] Would rebuild meta for {shorten_path(file_name)} -> {shorten_path(output_file_path)}", fg="green"))
         else:
-            metadata_dir = os.path.join(full_output_dir, ".meta")
             tqdm.write(click.style(f"Rebuilding meta for {shorten_path(file_name)}", fg="green"))
-            write_metadata_file(metadata_dir, file_name, output_file_path)
+            
+            input_hash = compute_file_hash(file_name)
+            output_hash = compute_file_hash(output_file_path)
+            
+            # For images, we can't easily guess unrelated to checking the markdown content or filesystem.
+            # We will leave image_files empty or null for now. 
+            # Or we could scan 'attachments' folder for images with same base name? 
+            # Or parse markdown for image links?
+            # Creating a robust rebuilder is hard. Let's start with empty images list.
+            image_files = "[]" 
+            
+            # expected_path should be relative to job output root.
+            # We have rel_output_path.
+            expected_rel_path = os.path.join(rel_output_path, output_filename)
+
+            metadata_manager.upsert_entry(
+                input_note_filename=os.path.basename(file_name),
+                output_markdown_filename=output_filename,
+                expected_path=expected_rel_path,
+                actual_file_path=output_file_path,
+                input_file_hash=input_hash,
+                output_file_hash=output_hash,
+                is_locked=False,
+                image_files=image_files
+            )
     else:
         # Output main file doesn't exist
         if dry_run: 
              tqdm.write(click.style(f"[dry-run] Output not found for {shorten_path(file_name)}: expected {shorten_path(output_file_path)}", fg="blue"))
-        # pass
+
 
 
 def rebuild_metadata_directory(
@@ -446,42 +573,56 @@ def rebuild_metadata_directory(
     config: Config,
     dry_run: bool = False
 ) -> None:
-    for root, _, files in os.walk(directory):
-        file_list = tqdm(files, desc="Rebuilding Metadata", unit="file")
-        for file in file_list:
-             filename = os.path.join(root, file)
-             if file.lower().endswith(".note") or file.lower().endswith(".pdf") or file.lower().endswith(".png") or file.lower().endswith(".spd"):
-                 rebuild_metadata_for_file(filename, config, output, dry_run=dry_run)
+    metadata_manager = MetadataManager(output)
+    try:
+        for root, _, files in os.walk(directory):
+            file_list = tqdm(files, desc="Rebuilding Metadata", unit="file")
+            for file in file_list:
+                 filename = os.path.join(root, file)
+                 if file.lower().endswith(".note") or file.lower().endswith(".pdf") or file.lower().endswith(".png") or file.lower().endswith(".spd"):
+                     rebuild_metadata_for_file(filename, config, output, metadata_manager, dry_run=dry_run)
+    finally:
+        metadata_manager.close()
+
 
 def clean_metadata_directory(directory: str, dry_run: bool = False) -> None:
-    import shutil
     import click
     
+    meta_db = os.path.join(directory, ".meta", "metadata")
+    if os.path.exists(meta_db):
+        if dry_run:
+            tqdm.write(click.style(f"[dry-run] Would delete DB: {shorten_path(meta_db)}", fg="red"))
+        else:
+            MetadataManager.remove_db(directory)
+            tqdm.write(click.style(f"Deleted DB: {shorten_path(meta_db)}", fg="red"))
+    else:
+        logger.info(f"No metadata DB found in {directory}")
+
+    # Also clean up any old .meta dirs in subdirectories if they exist from old version?
+    # The requirement says "remove all metadata entries", cleaning old .meta folders recursively is good hygiene.
     deleted_count = 0
     candidate_dirs = []
     
-    # First pass: collect all .meta directories
     for root, dirs, _ in os.walk(directory):
         if ".meta" in dirs:
             meta_path = os.path.join(root, ".meta")
+            # If this is THE meta dir we just handled (root/.meta), skip or double check
+            if os.path.abspath(directory) == os.path.abspath(root) and not dry_run: # we might have already deleted the DB inside.
+                 # But we might want to keep the .meta folder itself empty? Or delete it?
+                 # If we used MetadataManager.remove_db, it removed the file but not folder.
+                 pass
             candidate_dirs.append(meta_path)
-            
-    if not candidate_dirs:
-        logger.info(f"No .meta directories found in {directory}")
-        return
 
-    logger.info(f"Found {len(candidate_dirs)} .meta directories to clean in {directory}")
-    
-    for meta_path in candidate_dirs:
-        if dry_run:
-            tqdm.write(click.style(f"[dry-run] Would delete: {shorten_path(meta_path)}", fg="red"))
-        else:
-            try:
-                shutil.rmtree(meta_path)
-                tqdm.write(click.style(f"Deleted: {shorten_path(meta_path)}", fg="red"))
-                deleted_count += 1
-            except Exception as e:
-                logger.error(f"Failed to delete {meta_path}: {e}")
-                
-    if not dry_run:
-        logger.info(f"Cleaned {deleted_count} directories.")
+    if candidate_dirs:
+        logger.info(f"Found {len(candidate_dirs)} .meta directories to clean in {directory}")
+        for meta_path in candidate_dirs:
+            if dry_run:
+                tqdm.write(click.style(f"[dry-run] Would delete: {shorten_path(meta_path)}", fg="red"))
+            else:
+                try:
+                    shutil.rmtree(meta_path)
+                    tqdm.write(click.style(f"Deleted: {shorten_path(meta_path)}", fg="red"))
+                    deleted_count += 1
+                except Exception as e:
+                    logger.error(f"Failed to delete {meta_path}: {e}")
+

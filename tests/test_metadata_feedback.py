@@ -2,7 +2,9 @@ import os
 import time
 import shutil
 import pytest
-from sn2md.metadata import check_metadata_file, write_metadata_file, InputNotChangedError, OutputChangedError
+from sn2md.metadata_db import MetadataManager, InputNotChangedError, OutputChangedError
+from sn2md.importer import verify_metadata_file
+from sn2md.utils import compute_file_hash
 
 @pytest.fixture
 def test_dirs(tmp_path):
@@ -24,48 +26,82 @@ def test_metadata_feedback(test_dirs):
     input_file = test_dirs["input"]
     output_file = test_dirs["output"]
     metadata_dir = test_dirs["meta"]
-
-    # 1. Initial Setup
-    with open(input_file, "wb") as f:
-        f.write(b"original content")
-    with open(output_file, "w") as f:
-        f.write("# Original Markdown")
     
-    write_metadata_file(metadata_dir, input_file, output_file)
+    # We need the parent of .meta for MetadataManager, which is output_dir
+    output_dir_path = os.path.dirname(metadata_dir)
+    manager = MetadataManager(output_dir_path)
 
-    # 2. Verify InputNotChangedError
-    with pytest.raises(InputNotChangedError):
-        check_metadata_file(metadata_dir, input_file)
+    try:
+        # 1. Initial Setup
+        with open(input_file, "wb") as f:
+            f.write(b"original content")
+        with open(output_file, "w") as f:
+            f.write("# Original Markdown")
+        
+        input_hash = compute_file_hash(input_file)
+        output_hash = compute_file_hash(output_file)
+        
+        manager.upsert_entry(
+            input_note_filename=os.path.basename(input_file),
+            output_markdown_filename=os.path.basename(output_file),
+            expected_path=os.path.basename(output_file),
+            actual_file_path=output_file,
+            input_file_hash=input_hash,
+            output_file_hash=output_hash,
+            is_locked=False,
+            image_files="[]"
+        )
 
-    # 3. Verify Success on Input Change
-    time.sleep(0.01)
-    with open(input_file, "wb") as f:
-        f.write(b"modified content")
-    
-    # Should not raise exception
-    check_metadata_file(metadata_dir, input_file)
+        # 2. Verify InputNotChangedError
+        with pytest.raises(InputNotChangedError):
+            verify_metadata_file(manager, input_file, input_hash)
 
-    # Reset metadata for next step
-    with open(output_file, "w") as f:
-        f.write("# Modified Markdown")
-    write_metadata_file(metadata_dir, input_file, output_file)
+        # 3. Verify Success on Input Change
+        time.sleep(0.01)
+        with open(input_file, "wb") as f:
+            f.write(b"modified content")
+        
+        new_input_hash = compute_file_hash(input_file)
+        
+        # Should not raise exception
+        verify_metadata_file(manager, input_file, new_input_hash)
 
-    # 4. Verify OutputChangedError
-    # Change input again so it SHOULD process
-    with open(input_file, "wb") as f:
-        f.write(b"changed again")
-    
-    # But modify output locally
-    with open(output_file, "w") as f:
-        f.write("# User Modified Markdown")
+        # Reset metadata for next step (simulate successful conversion)
+        with open(output_file, "w") as f:
+            f.write("# Modified Markdown")
+        
+        new_output_hash = compute_file_hash(output_file)
+        manager.upsert_entry(
+            input_note_filename=os.path.basename(input_file),
+            output_markdown_filename=os.path.basename(output_file),
+            expected_path=os.path.basename(output_file),
+            actual_file_path=output_file,
+            input_file_hash=new_input_hash,
+            output_file_hash=new_output_hash,
+            is_locked=False,
+            image_files="[]"
+        )
 
-    with pytest.raises(OutputChangedError):
-        check_metadata_file(metadata_dir, input_file)
+        # 4. Verify OutputChangedError
+        # Change input again so it SHOULD process
+        with open(input_file, "wb") as f:
+            f.write(b"changed again")
+        
+        current_input_hash = compute_file_hash(input_file)
+        
+        # But modify output locally
+        with open(output_file, "w") as f:
+            f.write("# User Modified Markdown")
 
-    # 5. Verify ignoresnlock Property
-    # Add ignoresnlock: true to the output file
-    with open(output_file, "w") as f:
-        f.write("---\nignoresnlock: true\n---\n# User Modified Markdown")
-    
-    # Should not raise exception
-    check_metadata_file(metadata_dir, input_file)
+        with pytest.raises(OutputChangedError):
+            verify_metadata_file(manager, input_file, current_input_hash)
+
+        # 5. Verify ignoresnlock Property
+        # Add ignoresnlock: true to the output file
+        with open(output_file, "w") as f:
+            f.write("---\nignoresnlock: true\n---\n# User Modified Markdown")
+        
+        # Should not raise exception
+        verify_metadata_file(manager, input_file, current_input_hash)
+    finally:
+        manager.close()
