@@ -81,16 +81,7 @@ class Config:
         if self.api_key is None:
             self.api_key = self.openai_api_key
 
-@dataclass
-class ConversionMetadata:
-    # The input file name
-    input_file: str
-    # The hash of the input at the time of conversion
-    input_hash: str
-    # The file that was generated
-    output_file: str
-    # The hash of the output file at the time it was generated.
-    output_hash: str
+
 
 class ImageExtractor(ABC):
     @abstractmethod

@@ -184,7 +184,10 @@ class ImageConverter:
         if info is None:
             # pass to the process of getting visibility for mark file
             return self._get_mark_layer_visibility(page)
-        info_array = json.loads(info)
+        try:
+            info_array = json.loads(info)
+        except json.JSONDecodeError:
+            return {}
         for layer in info_array:
             is_bg_layer = layer.get('isBackgroundLayer')
             layer_id = layer.get('layerId')

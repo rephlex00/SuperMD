@@ -16,8 +16,9 @@ from .importer import (
     import_supernote_file_core,
 )
 from .importers.note import NotebookExtractor
+
 from .types import Config
-from .metadata import InputNotChangedError, OutputChangedError
+from .metadata_db import InputNotChangedError, OutputChangedError, MetadataManager
 
 logger = logging.getLogger(__name__)
 
@@ -173,14 +174,129 @@ def watch(config, jobs, delay):
     from .watcher import run_watcher
     run_watcher(config, parallelism=jobs, delay=delay)
 
-@cli.command(name="rebuild-meta")
+@cli.group()
+def meta():
+    """Manage metadata"""
+    pass
+
+@meta.command(name="list")
+@click.option("--config", default="config/jobs.local.yaml", help="Path to jobs.yaml config file")
+@click.option("--verbose", "-v", is_flag=True, help="Show detailed metadata columns")
+def list_meta(config, verbose):
+    """List metadata entries"""
+    from .job_config import load_jobs_config, merge_defaults
+    import os
+    
+    try:
+        batch_config = load_jobs_config(config)
+    except FileNotFoundError:
+        print(f"Config file not found: {config}")
+        sys.exit(66)
+
+    defaults = batch_config.defaults
+    
+    for job_data in batch_config.jobs:
+        job = merge_defaults(job_data, defaults)
+        out_path = os.path.expanduser(job.output)
+        in_path = os.path.expanduser(job.input)
+        
+        manager = MetadataManager(out_path) # Safe to init even if dir doesn't exist (it creates .meta)
+        entries = manager.get_all_entries()
+        manager.close()
+        
+        print(click.style(f"\nJob: {job.name}", fg="blue", bold=True))
+        
+        # 1. Analyze Tracked Entries
+        tracked_basenames = set()
+        if entries:
+            print(click.style(f"  Tracked ({len(entries)}):", fg="cyan"))
+            for entry in entries:
+                tracked_basenames.add(entry.input_note_filename)
+                
+                # Determine status
+                status_parts = []
+                if entry.is_locked:
+                    status_parts.append(click.style("Locked", fg="yellow"))
+                else:
+                    status_parts.append(click.style("Active", fg="green"))
+                
+                # Format Output
+                # Base output: input -> FULL output path
+                # Actual file path might be None if never written?
+                full_output_path = entry.actual_file_path if entry.actual_file_path else f"({entry.expected_path})"
+                
+                if verbose:
+                    print(f"    {click.style(entry.input_note_filename, bold=True)}")
+                    print(f"      Output: {full_output_path}")
+                    print(f"      Status: {' | '.join(status_parts)}")
+                    print(f"      Hashes: In={entry.input_file_hash[:8]}... Out={entry.output_file_hash[:8] if entry.output_file_hash else 'None'}...")
+                    print(f"      Images: {len(entry.image_files) if entry.image_files else 0} chars (JSON)")
+                else:
+                    # Concise view
+                    # input_basename -> /full/path/to/markdown.md [Status]
+                    print(f"    {entry.input_note_filename} -> {full_output_path} [{' | '.join(status_parts)}]")
+        else:
+             print(click.style("  Tracked: None", fg="dim"))
+
+        # 2. Analyze Untracked Files
+        untracked = []
+        if os.path.exists(in_path):
+            supported_exts = ('.note', '.pdf', '.png', '.spd')
+            for root, _, files in os.walk(in_path):
+                for file in files:
+                    if file.lower().endswith(supported_exts):
+                        if file not in tracked_basenames:
+                            # It's untracked. Why?
+                            # 1. Just not processed yet.
+                            # 2. Maybe errored? (We assume just 'New/Untracked')
+                            rel_path = os.path.relpath(os.path.join(root, file), in_path)
+                            untracked.append(rel_path)
+        
+        if untracked:
+            print(click.style(f"  Untracked ({len(untracked)}):", fg="magenta"))
+            for f in untracked:
+                 print(f"    {f} [Pending/New]")
+        else:
+            if os.path.exists(in_path):
+                print(click.style("  Untracked: None (All matched)", fg="green"))
+            else:
+                print(click.style(f"  Input directory not found: {in_path}", fg="red"))
+
+@meta.command(name="rm")
+@click.option("--config", default="config/jobs.local.yaml", help="Path to jobs.yaml config file")
+@click.option("--dry-run", is_flag=True, help="Preview without running")
+def rm_meta(config, dry_run):
+    """Remove all metadata entries (reset)"""
+    from .job_config import load_jobs_config, merge_defaults
+    import os
+    
+    try:
+        batch_config = load_jobs_config(config)
+    except FileNotFoundError:
+        print(f"Config file not found: {config}")
+        sys.exit(66)
+        
+    defaults = batch_config.defaults
+    
+    for job_data in batch_config.jobs:
+        job = merge_defaults(job_data, defaults)
+        out_path = os.path.expanduser(job.output)
+        print(click.style(f"Cleaning metadata for job: {job.name}", fg="magenta"))
+        
+        if not os.path.exists(out_path):
+             continue
+             
+        from .importer import clean_metadata_directory
+        clean_metadata_directory(out_path, dry_run=dry_run)
+
+@meta.command(name="rebuild")
 @click.option("--config", default="config/jobs.local.yaml", help="Path to jobs.yaml config file")
 @click.option("--dry-run", is_flag=True, help="Preview without running")
 def rebuild_meta(config, dry_run):
     """Rebuild metadata files for existing notes"""
     from .job_config import load_jobs_config, merge_defaults
     import os
-
+    
     try:
         batch_config = load_jobs_config(config)
     except FileNotFoundError:
@@ -206,49 +322,12 @@ def rebuild_meta(config, dry_run):
         if cfg_path:
             job_config_obj = get_config(cfg_path)
         else:
-            job_config_obj = get_config(user_config_dir() + "/sn2md.toml") # Fallback to default loading logic? 
-            # Actually get_config returns empty Config() if not found, but we might want defaults from sn2md.toml if not specified? 
-            # run_single_job uses new Config() if no config specified. Let's stick to that or use the CLI default pattern?
-            # The CLI default pattern uses user_config_dir() + "/sn2md.toml" as default for --config.
-            # Here we are inside a job which might not have a config.
-            job_config_obj = Config() 
+            # Load default config (global settings) if no specific job config
+            job_config_obj = get_config(user_config_dir() + "/sn2md.toml") 
 
-        # We actually probably want to load the global settings if job specific config is likely missing?
-        # But for now assuming default Config is okay or job specifies one.
-        
         from .importer import rebuild_metadata_directory
         rebuild_metadata_directory(in_path, out_path, job_config_obj, dry_run=dry_run)
 
-
-@cli.command(name="clean-meta")
-@click.option("--config", default="config/jobs.local.yaml", help="Path to jobs.yaml config file")
-@click.option("--dry-run", is_flag=True, help="Preview without running")
-def clean_meta(config, dry_run):
-    """Recursively delete all .meta folders in output directories"""
-    from .job_config import load_jobs_config, merge_defaults
-    import os
-
-    try:
-        batch_config = load_jobs_config(config)
-    except FileNotFoundError:
-        print(f"Config file not found: {config}")
-        sys.exit(66)
-
-    defaults = batch_config.defaults
-    logger.info(f"Loaded {len(batch_config.jobs)} jobs from {config}")
-
-    for job_data in batch_config.jobs:
-        job = merge_defaults(job_data, defaults)
-        print(click.style(f"Cleaning metadata for job: {job.name}", fg="magenta"))
-        
-        out_path = os.path.expanduser(job.output)
-        
-        if not os.path.exists(out_path):
-            print(click.style(f"Output path not found: {out_path}", fg="yellow"))
-            continue
-            
-        from .importer import clean_metadata_directory
-        clean_metadata_directory(out_path, dry_run=dry_run)
 
 from .service import install_service, uninstall_service, status_service, start_service, stop_service, logs_service
 

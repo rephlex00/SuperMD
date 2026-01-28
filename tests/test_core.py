@@ -63,17 +63,23 @@ def test_create_context(mock_config):
     assert context["images"][0]["name"] == "img1.png"
     assert context["year"] == "2025"
 
+@patch("sn2md.importer.compute_file_hash", return_value="mock_hash")
 @patch("sn2md.importer.generate_images")
 @patch("sn2md.importer.process_pages")
 @patch("sn2md.importer.create_context")
 @patch("sn2md.importer.generate_output")
-@patch("sn2md.importer.verify_metadata_file")  # Mock this out to avoid FS checks
+@patch("sn2md.importer.verify_metadata_file")
+@patch("os.path.exists", return_value=True) 
+@patch("os.path.getmtime", return_value=1234567890.0)
 def test_import_supernote_file_core_flow(
+    mock_mtime,
+    mock_exists,
     mock_verify,
     mock_generate_output, 
     mock_create_context, 
     mock_process_pages, 
     mock_generate_images,
+    mock_compute_hash,
     mock_config
 ):
     """Verify the core flow calls all steps in order."""
@@ -81,23 +87,28 @@ def test_import_supernote_file_core_flow(
     # Setup context manager mock
     mock_generate_images.return_value.__enter__.return_value = ["img.png"]
     
-    import_supernote_file_core(
-        MockExtractor(), 
-        "test.note", 
-        "out_dir", 
-        mock_config
-    )
-    
-    mock_verify.assert_called_once()
-    mock_process_pages.assert_called_once()
-    mock_create_context.assert_called_once()
-    mock_generate_output.assert_called_once()
+    # Should also mock MetadataManager context manager or pass None?
+    # import_supernote_file_core instantiates one if None.
+    # We can patch MetadataManager
+    with patch("sn2md.importer.MetadataManager") as MockManager:
+        import_supernote_file_core(
+            MockExtractor(), 
+            "test.note", 
+            "out_dir", 
+            mock_config
+        )
+        
+        mock_verify.assert_called_once()
+        mock_process_pages.assert_called_once()
+        mock_create_context.assert_called_once()
+        mock_generate_output.assert_called_once()
+        MockManager.return_value.close.assert_called_once()
 
+@patch("sn2md.importer.compute_file_hash", return_value="mock_hash")
 @patch("builtins.open", new_callable=mock_open)
 @patch("os.makedirs")
 @patch("os.rename")
-@patch("sn2md.importer.write_metadata_file")
-def test_generate_output(mock_meta, mock_rename, mock_makedirs, mock_file, mock_config):
+def test_generate_output(mock_rename, mock_makedirs, mock_file, mock_hash, mock_config):
     """Test output generation (writing file and moving images)."""
     
     context = {
@@ -109,13 +120,17 @@ def test_generate_output(mock_meta, mock_rename, mock_makedirs, mock_file, mock_
     from jinja2 import Template
     template = Template(mock_config.template)
     
+    mock_manager = MagicMock()
+    
     generate_output(
         ["/tmp/img.png"], 
         mock_config, 
         context, 
         "test.note", 
         "/out", 
-        template
+        template,
+        mock_manager,
+        "input_hash"
     )
     
     # Verify file write
@@ -125,3 +140,6 @@ def test_generate_output(mock_meta, mock_rename, mock_makedirs, mock_file, mock_
     
     # Verify image move
     mock_rename.assert_called_with("/tmp/img.png", "/out/test/attachments/img.png")
+    
+    # Verify metadata update
+    mock_manager.upsert_entry.assert_called()
