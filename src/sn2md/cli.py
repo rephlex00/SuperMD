@@ -10,10 +10,9 @@ from sn2md.importers.pdf import PDFExtractor
 from sn2md.importers.png import PNGExtractor
 from sn2md import __version__
 
-from .importer import (
-    logger as importer_logger,
-    import_supernote_directory_core,
-    import_supernote_file_core,
+from .converter import (
+    convert_directory,
+    convert_file,
 )
 from .importers.note import NotebookExtractor
 
@@ -31,7 +30,6 @@ def setup_logging(level):
     )
 
     logger.setLevel(level)
-    importer_logger.setLevel(level)
     logger.debug(f"Logging level: {level}")
 
 
@@ -120,13 +118,13 @@ def import_supernote_file(ctx, filename: str) -> None:
     model = ctx.obj["model"]
     try:
         if filename.lower().endswith(".note"):
-            import_supernote_file_core(NotebookExtractor(), filename, output, config, force, progress, model, cooldown=5.0)
+            convert_file(NotebookExtractor(), filename, output, config, force, progress, model, cooldown=5.0)
         elif filename.lower().endswith(".pdf"):
-            import_supernote_file_core(PDFExtractor(), filename, output, config, force, progress, model, cooldown=5.0)
+            convert_file(PDFExtractor(), filename, output, config, force, progress, model, cooldown=5.0)
         elif filename.lower().endswith(".png"):
-            import_supernote_file_core(PNGExtractor(), filename, output, config, force, progress, model, cooldown=5.0)
+            convert_file(PNGExtractor(), filename, output, config, force, progress, model, cooldown=5.0)
         elif filename.lower().endswith(".spd"):
-            import_supernote_file_core(AtelierExtractor(), filename, output, config, force, progress, model, cooldown=5.0)
+            convert_file(AtelierExtractor(), filename, output, config, force, progress, model, cooldown=5.0)
         else:
             print("Unsupported file format")
             sys.exit(1)
@@ -153,7 +151,7 @@ def import_supernote_directory(ctx, directory: str) -> None:
     force = ctx.obj["force"]
     progress = ctx.obj["progress"]
     model = ctx.obj["model"]
-    import_supernote_directory_core(directory, output, config, force, progress, model, cooldown=5.0)
+    convert_directory(directory, output, config, force, progress, model, cooldown=5.0)
 
 @cli.command()
 @click.option("--config", default="config/jobs.local.yaml", help="Path to jobs.yaml config file")
@@ -195,76 +193,11 @@ def list_meta(config, verbose):
 
     defaults = batch_config.defaults
     
+    from .report import print_job_report
+    
     for job_data in batch_config.jobs:
         job = merge_defaults(job_data, defaults)
-        out_path = os.path.expanduser(job.output)
-        in_path = os.path.expanduser(job.input)
-        
-        manager = MetadataManager(out_path) # Safe to init even if dir doesn't exist (it creates .meta)
-        entries = manager.get_all_entries()
-        manager.close()
-        
-        print(click.style(f"\nJob: {job.name}", fg="blue", bold=True))
-        
-        # 1. Analyze Tracked Entries
-        tracked_basenames = set()
-        if entries:
-            print(click.style(f"  Tracked ({len(entries)}):", fg="cyan"))
-            for entry in entries:
-                tracked_basenames.add(entry.input_note_filename)
-                
-                # Determine status
-                status_parts = []
-                if entry.is_locked:
-                    status_parts.append(click.style("Locked", fg="yellow"))
-                else:
-                    status_parts.append(click.style("Active", fg="green"))
-                
-                # Check for broken link
-                if entry.actual_file_path and not os.path.exists(entry.actual_file_path):
-                     status_parts.append(click.style("Broken", fg="red", bold=True))
-                
-                # Format Output
-                # Base output: input -> FULL output path
-                # Actual file path might be None if never written?
-                full_output_path = entry.actual_file_path if entry.actual_file_path else f"({entry.expected_path})"
-                
-                if verbose:
-                    print(f"    {click.style(entry.input_note_filename, bold=True)}")
-                    print(f"      Output: {full_output_path}")
-                    print(f"      Status: {' | '.join(status_parts)}")
-                    print(f"      Hashes: In={entry.input_file_hash[:8]}... Out={entry.output_file_hash[:8] if entry.output_file_hash else 'None'}...")
-                    print(f"      Images: {len(entry.image_files) if entry.image_files else 0} chars (JSON)")
-                else:
-                    # Concise view
-                    # input_basename -> /full/path/to/markdown.md [Status]
-                    print(f"    {entry.input_note_filename} -> {full_output_path} [{' | '.join(status_parts)}]")
-        else:
-             print(click.style("  Tracked: None", dim=True))
-
-        # 2. Analyze Untracked Files
-        untracked = []
-        if os.path.exists(in_path):
-            supported_exts = ('.note', '.pdf', '.png', '.spd')
-            for root, _, files in os.walk(in_path):
-                for file in files:
-                    if file.lower().endswith(supported_exts):
-                        if file not in tracked_basenames:
-                            # It's untracked. Why?
-                            # 1. Just not processed yet.
-                            # 2. Maybe errored? (We assume just 'New/Untracked')
-                            rel_path = os.path.relpath(os.path.join(root, file), in_path)
-                            untracked.append(rel_path)
-        
-        if untracked:
-            print(click.style(f"  Untracked ({len(untracked)}):", fg="magenta"))
-            for f in untracked:
-                 print(f"    {f} [Pending/New]")
-        else:
-            if os.path.exists(in_path):
-                print(click.style("  Untracked: None (All matched)", fg="green"))
-            else:
-                print(click.style(f"  Input directory not found: {in_path}", fg="red"))
+        print_job_report(job, verbose)
 
 @meta.command(name="rm")
 @click.option("--config", default="config/jobs.local.yaml", help="Path to jobs.yaml config file")
@@ -290,7 +223,7 @@ def rm_meta(config, dry_run):
         if not os.path.exists(out_path):
              continue
              
-        from .importer import clean_metadata_directory
+        from .converter import clean_metadata_directory
         clean_metadata_directory(out_path, dry_run=dry_run)
 
 @meta.command(name="rebuild")
@@ -329,7 +262,7 @@ def rebuild_meta(config, dry_run):
             # Load default config (global settings) if no specific job config
             job_config_obj = get_config(user_config_dir() + "/sn2md.toml") 
 
-        from .importer import rebuild_metadata_directory
+        from .converter import rebuild_metadata_directory
         rebuild_metadata_directory(in_path, out_path, job_config_obj, dry_run=dry_run)
 
 

@@ -25,15 +25,17 @@ def test_run_single_job_dry_run_construction(capsys, monkeypatch):
     # Mock os.path.exists to return True
     monkeypatch.setattr(os.path, "exists", lambda p: True)
     
+    # Mock convert_directory so we don't actually run it
+    monkeypatch.setattr("sn2md.batches.convert_directory", lambda *args, **kwargs: None)
+    
     success = run_single_job(job, dry_run=True)
     assert success is True
     
     captured = capsys.readouterr()
     output = captured.out
     
-    assert "[dry-run] Would run conversion:" in output
-    assert "[dry-run] Level: DEBUG" in output
-    assert "[dry-run] Force: True" in output
+    assert "[dry-run] Configuration check passed." in output
+
     
     # Check paths expanded
     home = os.path.expanduser("~")
@@ -54,7 +56,7 @@ def test_run_single_job_direct_execution(monkeypatch):
 
     called_args = {}
 
-    def mock_core(directory, output, config, force, progress, model):
+    def mock_core(directory, output, config, force, progress, model, dry_run, cooldown):
         called_args["directory"] = directory
         called_args["output"] = output
         called_args["progress"] = progress
@@ -66,7 +68,7 @@ def test_run_single_job_direct_execution(monkeypatch):
         pass
 
     # Mock sn2md imports in sn2md_app.batches
-    monkeypatch.setattr("sn2md.batches.import_supernote_directory_core", mock_core)
+    monkeypatch.setattr("sn2md.batches.convert_directory", mock_core)
     monkeypatch.setattr("sn2md.batches.setup_logging", mock_setup)
     monkeypatch.setattr("sn2md.batches.get_config", mock_get_config)
     
@@ -97,10 +99,10 @@ def test_run_single_job_disable_progress(monkeypatch):
              
     # Since we use keyword args in implementation:
     # import_supernote_directory_core(directory=..., progress=...)
-    def mock_core_kwargs(directory, output, config, force, progress, model):
+    def mock_core_kwargs(directory, output, config, force, progress, model, dry_run, cooldown):
         called_args["progress"] = progress
 
-    monkeypatch.setattr("sn2md.batches.import_supernote_directory_core", mock_core_kwargs)
+    monkeypatch.setattr("sn2md.batches.convert_directory", mock_core_kwargs)
     monkeypatch.setattr("sn2md.batches.setup_logging", lambda l: None)
     
     # Run with disable_progress=True

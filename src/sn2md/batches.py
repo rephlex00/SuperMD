@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import List
 
 # Direct imports from sn2md
-from sn2md.importer import import_supernote_directory_core
+from sn2md.converter import convert_directory
 from sn2md.cli import setup_logging, get_config
 from sn2md.types import Config
 
@@ -152,7 +152,7 @@ def run_single_job(job: JobConfig, dry_run: bool = False, debug_mode: bool = Fal
                         os.environ[k] = v
 
     try:
-        import_supernote_directory_core(
+        convert_directory(
             directory=in_path,
             output=out_path,
             config=config,
