@@ -1,9 +1,10 @@
-import logging
 import sys
 import tomllib
 
+
 import click
 from platformdirs import user_config_dir
+from tqdm import tqdm
 
 from sn2md.importers.atelier import AtelierExtractor
 from sn2md.importers.pdf import PDFExtractor
@@ -19,23 +20,10 @@ from .importers.note import NotebookExtractor
 from .types import Config
 from .metadata_db import InputNotChangedError, OutputChangedError, MetadataManager
 
-logger = logging.getLogger(__name__)
-
+from sn2md.console import console
 
 def setup_logging(level):
-    logging.basicConfig(
-        level=level,
-        format="[%(levelname)s] %(message)s",
-        force=True
-    )
-
-    logger.setLevel(level)
-    logger.debug(f"Logging level: {level}")
-
-
-    # Suppress PIL debugging
-    pil_logger = logging.getLogger('PIL.PngImagePlugin')
-    pil_logger.setLevel(logging.WARNING)
+    console.set_level(level)
 
 
 def get_config(config_file: str) -> Config:
@@ -45,7 +33,7 @@ def get_config(config_file: str) -> Config:
             file_config = Config(**data)
             return file_config
     except FileNotFoundError:
-        print(f"No config file found at {config_file}, using defaults", file=sys.stderr)
+        console.warning(f"No config file found at {config_file}, using defaults")
 
     return Config()
 
@@ -117,24 +105,45 @@ def import_supernote_file(ctx, filename: str) -> None:
     progress = ctx.obj["progress"]
     model = ctx.obj["model"]
     try:
-        if filename.lower().endswith(".note"):
-            convert_file(NotebookExtractor(), filename, output, config, force, progress, model, cooldown=5.0)
-        elif filename.lower().endswith(".pdf"):
-            convert_file(PDFExtractor(), filename, output, config, force, progress, model, cooldown=5.0)
-        elif filename.lower().endswith(".png"):
-            convert_file(PNGExtractor(), filename, output, config, force, progress, model, cooldown=5.0)
-        elif filename.lower().endswith(".spd"):
-            convert_file(AtelierExtractor(), filename, output, config, force, progress, model, cooldown=5.0)
+
+        if progress:
+            pbar_context = tqdm(total=1, desc="Processing", unit="file")
         else:
-            print("Unsupported file format")
-            sys.exit(1)
+            from contextlib import nullcontext
+            pbar_context = nullcontext()
+
+        with pbar_context as pbar:
+            extractor = None
+            if filename.lower().endswith(".note"):
+                extractor = NotebookExtractor()
+            elif filename.lower().endswith(".pdf"):
+                extractor = PDFExtractor()
+            elif filename.lower().endswith(".png"):
+                extractor = PNGExtractor()
+            elif filename.lower().endswith(".spd"):
+                extractor = AtelierExtractor()
+            
+            if extractor:
+                convert_file(
+                    extractor, 
+                    filename, 
+                    output, 
+                    config, 
+                    force, 
+                    progress_bar=pbar, 
+                    model=model, 
+                    cooldown=5.0
+                )
+            else:
+                console.error(f"Unsupported file format: {filename}")
+                sys.exit(1)
+
     except InputNotChangedError:
-        logger.info(f"Skipping {filename}: Input not changed")
+        console.info(f"Skipping {filename}: Input not changed")
     except OutputChangedError as e:
-        print(click.style(f"Refusing to update {filename}: Output file has been modified locally. Use --force to overwrite.", fg="yellow"))
-        logger.warning(f"Skipping {filename}: {e}")
+        console.warning(f"Refusing to update {filename}: Output modified. Use --force to overwrite. ({e})")
     except ValueError as e:
-        print(e)
+        console.error(str(e))
         sys.exit(1)
 
 
@@ -237,21 +246,21 @@ def rebuild_meta(config, dry_run):
     try:
         batch_config = load_jobs_config(config)
     except FileNotFoundError:
-        print(f"Config file not found: {config}")
+        console.error(f"Config file not found: {config}")
         sys.exit(66)
 
     defaults = batch_config.defaults
-    logger.info(f"Loaded {len(batch_config.jobs)} jobs from {config}")
+    console.info(f"Loaded {len(batch_config.jobs)} jobs from {config}")
 
     for job_data in batch_config.jobs:
         job = merge_defaults(job_data, defaults)
-        print(click.style(f"Rebuilding metadata for job: {job.name}", fg="blue"))
+        console.log(f"Rebuilding metadata for job: {job.name}", fg="blue")
         
         in_path = os.path.expanduser(job.input)
         out_path = os.path.expanduser(job.output)
         
         if not os.path.exists(in_path):
-            print(click.style(f"Input path not found: {in_path}", fg="red"))
+            console.log(f"Input path not found: {in_path}", fg="red")
             continue
 
         # Load config for templates
