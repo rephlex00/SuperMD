@@ -8,14 +8,14 @@ from sn2md.cli import cli
 def runner():
     return CliRunner()
 
-@patch("sn2md.cli.import_supernote_file_core")
+@patch("sn2md.cli.convert_file")
 def test_cli_file(mock_core, runner):
     """Test 'file' command invokes core importer."""
     result = runner.invoke(cli, ["file", "test.note"])
     assert result.exit_code == 0
     mock_core.assert_called()
 
-@patch("sn2md.cli.import_supernote_directory_core")
+@patch("sn2md.cli.convert_directory")
 def test_cli_directory(mock_core, runner):
     """Test 'directory' command invokes directory importer."""
     result = runner.invoke(cli, ["directory", "test_dir"])
@@ -64,7 +64,7 @@ def test_cli_service_logs(mock_logs, runner):
     assert result.exit_code == 0
     mock_logs.assert_called()
 
-@patch("sn2md.cli.MetadataManager")
+@patch("sn2md.report.MetadataManager")
 def test_cli_meta_list(mock_manager_cls, runner):
     """Test 'meta list' command."""
     mock_manager = mock_manager_cls.return_value
@@ -87,7 +87,7 @@ def test_cli_meta_list(mock_manager_cls, runner):
     
     mock_manager.get_all_entries.assert_called()
 
-@patch("sn2md.importer.rebuild_metadata_directory")
+@patch("sn2md.converter.rebuild_metadata_directory")
 def test_cli_meta_rebuild(mock_rebuild, runner):
     """Test 'meta rebuild' command."""
     # The CLI imports this function inside the command handler, so we patch where it is defined.
@@ -95,7 +95,7 @@ def test_cli_meta_rebuild(mock_rebuild, runner):
     assert result.exit_code == 0
     mock_rebuild.assert_called()
 
-@patch("sn2md.importer.clean_metadata_directory")
+@patch("sn2md.converter.clean_metadata_directory")
 def test_cli_meta_rm(mock_clean, runner):
     """Test 'meta rm' command."""
     # The CLI imports this function inside the command handler.

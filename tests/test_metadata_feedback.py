@@ -3,7 +3,7 @@ import time
 import shutil
 import pytest
 from sn2md.metadata_db import MetadataManager, InputNotChangedError, OutputChangedError
-from sn2md.importer import verify_metadata_file
+from sn2md.converter import verify_metadata_file
 from sn2md.utils import compute_file_hash
 
 @pytest.fixture

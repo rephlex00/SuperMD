@@ -1,26 +1,29 @@
-
 import time
 from unittest.mock import MagicMock
 from sn2md.watcher import DebouncedEventHandler
 
 def test_debounced_event_handler():
-    """Verify handler acts on debounce."""
-    callback = MagicMock()
-    handler = DebouncedEventHandler(callback, debounce_interval=0.1)
+    """Verify handler updates state on events."""
+    handler = DebouncedEventHandler()
     
     event = MagicMock()
     event.is_directory = False
-    event.src_path = "test"
+    event.src_path = "test.note"
+    event.event_type = "modified"
     
-    # First call
-    handler.on_any_event(event)
-    assert callback.call_count == 1
+    # Initial state
+    assert handler.has_pending_changes is False
+    assert handler.last_change_time == 0
     
-    # Immediate second call (should be ignored)
+    # Event triggers update
     handler.on_any_event(event)
-    assert callback.call_count == 1
+    assert handler.has_pending_changes is True
+    t1 = handler.last_change_time
+    assert t1 > 0
     
-    # Wait and call again
-    time.sleep(0.2)
+    # Subsequent event updates time
+    time.sleep(0.01)
     handler.on_any_event(event)
-    assert callback.call_count == 2
+    t2 = handler.last_change_time
+    assert t2 > t1
+    assert handler.has_pending_changes is True
