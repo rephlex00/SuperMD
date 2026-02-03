@@ -34,7 +34,11 @@ def test_run_single_job_dry_run_construction(capsys, monkeypatch):
     captured = capsys.readouterr()
     output = captured.out
     
-    assert "[dry-run] Configuration check passed." in output
+    import re
+    ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
+    clean_output = ansi_escape.sub('', output)
+    
+    assert "[dry-run] Configuration check passed." in clean_output
 
     
     # Check paths expanded

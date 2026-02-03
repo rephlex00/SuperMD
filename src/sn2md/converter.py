@@ -1,11 +1,10 @@
 import uuid
 import shutil
-import logging
 import os
 import posixpath
 import json
 from typing import Generator
-from time import sleep
+from time import sleep, time
 from contextlib import contextmanager
 from datetime import datetime
 from jinja2 import Template
@@ -25,8 +24,8 @@ from sn2md.metadata_db import (
     OutputChangedError
 )
 from sn2md.context import create_basic_context, create_context
+from sn2md.console import console
 
-logger = logging.getLogger(__name__)
 
 @contextmanager
 def generate_images(
@@ -35,7 +34,7 @@ def generate_images(
     image_output_path = os.path.join(output, uuid.uuid4().hex)
     os.makedirs(image_output_path, exist_ok=True)
 
-    logger.debug("Storing images in %s", shorten_path(image_output_path))
+    console.debug(f"Storing images in {shorten_path(image_output_path)}")
 
     try:
         yield image_extractor.extract_images(file_name, image_output_path)
@@ -47,16 +46,32 @@ def process_pages(
     pngs: list[str],
     config: Config,
     model: str,
-    progress: bool,
+    progress_bar: tqdm | None = None,
     prompt_context: dict | None = None,
     cooldown: float = 0.0,
 ) -> str:
-    page_list = tqdm(pngs, desc="Processing pages", unit="page") if progress else pngs
-
     template_output = ""
-    for i, page in enumerate(page_list):
+    total_pages = len(pngs)
+
+    for i, page in enumerate(pngs):
+        # Update progress description
+        if progress_bar:
+             progress_bar.set_description(f"Processing Page {i+1}/{total_pages}")
+        
         if cooldown > 0:
-            sleep(cooldown) # Cooldown between calls
+            # Cooldown with visual feedback
+            step = 0.1
+            remaining = cooldown
+            while remaining > 0:
+                if progress_bar:
+                    progress_bar.set_description(f"Cooldown: {remaining:.1f}s (Page {i+1}/{total_pages})")
+                sleep(step)
+                remaining -= step
+            
+            # Restore description after cooldown
+            if progress_bar:
+                 progress_bar.set_description(f"Processing Page {i+1}/{total_pages}")
+
         context = ""
         if i > 0 and len(template_output) > 0:
             # include the last 50 characters...for continuity of the transcription
@@ -75,11 +90,11 @@ def process_pages(
                 )
             )
         except KeyError as e:
-            logger.error(f"Template rendering failed. Missing key: {e}")
+            console.error(f"Template rendering failed. Missing key: {e}")
             if prompt_context:
-                logger.error(f"Available context keys: {list(prompt_context.keys())}")
+                console.error(f"Available context keys: {list(prompt_context.keys())}")
             else:
-                logger.error("Prompt context is None!")
+                console.error("Prompt context is None!")
             raise
     return template_output
 
@@ -118,16 +133,16 @@ def generate_output(
     output_path_and_file = os.path.join(output_path, output_filename)
     with open(output_path_and_file, "w") as f:
         _ = f.write(jinja_markdown)
-    logger.debug("Wrote output to %s", shorten_path(output_path_and_file))
+    console.debug(f"Wrote output to {shorten_path(output_path_and_file)}")
 
     # Preserve file creation date
     if "ctime" in context:
         try:
             timestamp = context["ctime"].timestamp()
             os.utime(output_path_and_file, (timestamp, timestamp))
-            logger.debug("Restored timestamp to %s", context["ctime"])
+            console.debug(f"Restored timestamp to {context['ctime']}")
         except Exception as e:
-            logger.warning("Failed to restore timestamp: %s", e)
+            console.warning(f"Failed to restore timestamp: {e}")
 
     # move everything from image_output_path to the dedicated image folder:
     image_files = []
@@ -137,7 +152,7 @@ def generate_output(
         shutil.move(png_path, destination)
         image_files.append(png_name)
 
-    logger.debug("Moved images to %s", shorten_path(image_output_dir))
+    console.debug(f"Moved images to {shorten_path(image_output_dir)}")
 
     # Update metadata
     output_hash = compute_file_hash(output_path_and_file)
@@ -157,9 +172,13 @@ def generate_output(
         image_files=json.dumps(image_files)
     )
 
-    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    msg = f"[{timestamp}] Generated: {output_path_and_file}"
-    tqdm.write(click.style(msg, fg="green"))
+    note_ctime = ""
+    if "ctime" in context:
+        # Format as YYYY-MM-DD
+        note_ctime = f" (Created: {context['ctime'].strftime('%Y-%m-%d')})"
+
+    msg = f"Generated: {output_path_and_file}{note_ctime}"
+    console.log(msg, fg="green")
 
 
 def verify_metadata_file(
@@ -177,9 +196,9 @@ def verify_metadata_file(
     # 1. Check if output is missing (Broken link) -> Reprocess
     if not entry.actual_file_path or not os.path.exists(entry.actual_file_path):
         if dry_run:
-             tqdm.write(click.style(f"  [dry-run] Output file missing for {file_basename}", fg="blue"))
+             console.log(f"  [dry-run] Output file missing for {file_basename}", fg="blue")
         else:
-             logger.info(f"Output file missing for {file_basename}, forcing reprocessing.")
+             console.info(f"Output file missing for {file_basename}, forcing reprocessing.")
         return 
 
     # 2. Check if input has changed
@@ -210,13 +229,16 @@ def convert_file(
     output: str,
     config: Config,
     force: bool = False,
-    progress: bool = False,
+    progress_bar: tqdm | None = None,
     model: str | None = None,
     dry_run: bool = False,
     metadata_manager: MetadataManager | None = None,
     cooldown: float = 0.0,
 ) -> None:
-    logger.debug("convert_file: %s", shorten_path(file_name))
+    console.debug(f"convert_file: {shorten_path(file_name)}")
+    
+    if progress_bar:
+        progress_bar.set_description(f"Processing {shorten_path(file_name)}")
     
     should_close_manager = False
     if metadata_manager is None:
@@ -225,7 +247,7 @@ def convert_file(
 
     try:
         if not os.path.exists(file_name):
-            logger.error(f"File not found: {file_name}")
+            console.error(f"File not found: {file_name}")
             return
 
         input_hash = compute_file_hash(file_name)
@@ -235,7 +257,7 @@ def convert_file(
             verify_metadata_file(metadata_manager, file_name, input_hash, dry_run=dry_run)
 
         if dry_run:
-            tqdm.write(click.style(f"[dry-run] Would process {shorten_path(file_name)}", fg="green"))
+            console.log(f"[dry-run] Would process {shorten_path(file_name)}", fg="green")
             return
 
         # Prepare for processing
@@ -252,7 +274,7 @@ def convert_file(
                              if os.path.exists(img_path):
                                  os.remove(img_path)
                  except Exception as e:
-                     logger.warning(f"Failed to cleanup old images: {e}")
+                     console.warning(f"Failed to cleanup old images: {e}")
         except Exception:
              pass
 
@@ -266,7 +288,7 @@ def convert_file(
                 pngs,
                 config,
                 model,
-                progress,
+                progress_bar,
                 basic_context,
                 cooldown=cooldown,
             )
@@ -311,12 +333,30 @@ def convert_directory(
     metadata_manager = MetadataManager(output)
     try:
         for root, _, files in os.walk(directory):
-            file_list = (
-                tqdm(files, desc="Processing files", unit="file") if progress else files
-            )
-            for file in file_list:
+            # Sort files for consistent order
+            files.sort()
+            
+            # Filter relevant files first to know count
+            relevant_files = [
+                f for f in files 
+                if f.lower().endswith((".note", ".pdf", ".png", ".spd"))
+            ]
+            
+            if not relevant_files:
+                continue
+
+            file_iterator = relevant_files
+            pbar = None
+            
+            if progress:
+                pbar = tqdm(relevant_files, desc="Scanning...", unit="file")
+                file_iterator = pbar
+
+            for file in file_iterator:
                 filename = os.path.join(root, file)
-                logger.debug(f"Scanning file: {shorten_path(filename)}")
+                console.debug(f"Scanning file: {shorten_path(filename)}")
+                
+                # Check extension again (redundant but safe if logic changes)
                 try:
                     extractor = None
                     if file.lower().endswith(".note"):
@@ -335,25 +375,24 @@ def convert_directory(
                             output,
                             config,
                             force,
-                            progress,
-                            model,
-                            dry_run,
+                            progress_bar=pbar,
+                            model=model,
+                            dry_run=dry_run,
                             metadata_manager=metadata_manager,
                             cooldown=cooldown
                         )
                 except InputNotChangedError:
                     if dry_run:
-                        tqdm.write(click.style(f"[dry-run] Would skip {shorten_path(filename)} (Unchanged)", fg="yellow"))
+                        console.log(f"[dry-run] Would skip {shorten_path(filename)} (Unchanged)", fg="yellow")
                     else:
-                        logger.debug(f"Skipping {shorten_path(filename)}: Input not changed")
+                        console.debug(f"Skipping {shorten_path(filename)}: Input not changed")
                 except OutputChangedError as e:
                     if dry_run:
-                        tqdm.write(click.style(f"[dry-run] Would skip {shorten_path(filename)} (Output modified)", fg="red"))
+                        console.log(f"[dry-run] Would skip {shorten_path(filename)} (Output modified)", fg="red")
                     else:
-                        tqdm.write(click.style(f"Refusing to update {shorten_path(filename)}: Output file has been modified locally. Use --force to overwrite.", fg="yellow"))
-                        logger.warning(f"Skipping {shorten_path(filename)}: {e}")
+                        console.warning(f"Refusing to update {shorten_path(filename)}: Output modified. Use --force to overwrite. ({e})")
                 except ValueError as e:
-                    logger.exception(f"Skipping {shorten_path(filename)}: {e}")
+                    console.error(f"Skipping {shorten_path(filename)}: {e}")
     finally:
         metadata_manager.close()
 
@@ -365,7 +404,7 @@ def rebuild_metadata_for_file(
     metadata_manager: MetadataManager,
     dry_run: bool = False
 ) -> None:
-    logger.debug(f"Rebuild check for {shorten_path(file_name)}")
+    console.debug(f"Rebuild check for {shorten_path(file_name)}")
     
     file_basename = os.path.splitext(os.path.basename(file_name))[0]
     basic_context = create_basic_context(file_basename, file_name)
@@ -386,9 +425,9 @@ def rebuild_metadata_for_file(
     
     if os.path.exists(output_file_path):
         if dry_run:
-            tqdm.write(click.style(f"[dry-run] Would rebuild meta for {shorten_path(file_name)} -> {shorten_path(output_file_path)}", fg="green"))
+            console.log(f"[dry-run] Would rebuild meta for {shorten_path(file_name)} -> {shorten_path(output_file_path)}", fg="green")
         else:
-            tqdm.write(click.style(f"Rebuilding meta for {shorten_path(file_name)}", fg="green"))
+            console.log(f"Rebuilding meta for {shorten_path(file_name)}", fg="green")
             
             input_hash = compute_file_hash(file_name)
             output_hash = compute_file_hash(output_file_path)
@@ -410,7 +449,7 @@ def rebuild_metadata_for_file(
     else:
         # Output main file doesn't exist
         if dry_run: 
-             tqdm.write(click.style(f"[dry-run] Output not found for {shorten_path(file_name)}: expected {shorten_path(output_file_path)}", fg="blue"))
+             console.log(f"[dry-run] Output not found for {shorten_path(file_name)}: expected {shorten_path(output_file_path)}", fg="blue")
 
 
 def rebuild_metadata_directory(
@@ -435,12 +474,12 @@ def clean_metadata_directory(directory: str, dry_run: bool = False) -> None:
     meta_db = os.path.join(directory, ".meta", "metadata")
     if os.path.exists(meta_db):
         if dry_run:
-            tqdm.write(click.style(f"[dry-run] Would delete DB: {shorten_path(meta_db)}", fg="red"))
+            console.log(f"[dry-run] Would delete DB: {shorten_path(meta_db)}", fg="red")
         else:
             MetadataManager.remove_db(directory)
-            tqdm.write(click.style(f"Deleted DB: {shorten_path(meta_db)}", fg="red"))
+            console.log(f"Deleted DB: {shorten_path(meta_db)}", fg="red")
     else:
-        logger.info(f"No metadata DB found in {directory}")
+        console.info(f"No metadata DB found in {directory}")
 
     candidate_dirs = []
     
@@ -452,13 +491,13 @@ def clean_metadata_directory(directory: str, dry_run: bool = False) -> None:
             candidate_dirs.append(meta_path)
 
     if candidate_dirs:
-        logger.info(f"Found {len(candidate_dirs)} .meta directories to clean in {directory}")
+        console.info(f"Found {len(candidate_dirs)} .meta directories to clean in {directory}")
         for meta_path in candidate_dirs:
             if dry_run:
                 tqdm.write(click.style(f"[dry-run] Would delete: {shorten_path(meta_path)}", fg="red"))
             else:
                 try:
                     shutil.rmtree(meta_path)
-                    tqdm.write(click.style(f"Deleted: {shorten_path(meta_path)}", fg="red"))
+                    console.log(f"Deleted: {shorten_path(meta_path)}", fg="red")
                 except Exception as e:
-                    logger.error(f"Failed to delete {meta_path}: {e}")
+                    console.error(f"Failed to delete {meta_path}: {e}")

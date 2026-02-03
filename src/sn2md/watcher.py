@@ -5,7 +5,8 @@ import subprocess
 from pathlib import Path
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
-from .batches import run_batches, log
+from .batches import run_batches
+from sn2md.console import console
 
 class DebouncedEventHandler(FileSystemEventHandler):
     def __init__(self):
@@ -27,14 +28,14 @@ class DebouncedEventHandler(FileSystemEventHandler):
         self.last_change_time = time.time()
         if not self.has_pending_changes:
             self.has_pending_changes = True
-            log(f"[watch] Detected change ({event.event_type}): {event.src_path} (waiting for stability)")
+            console.log(f"[watch] Detected change ({event.event_type}): {event.src_path} (waiting for stability)")
         else:
              # Don't spam logs for every subsequent change file
              pass
 
 def run_watcher(config_path: str, parallelism: int = 1, delay: float = 30.0):
-    log(f"[watch] Starting watcher using config: {config_path}")
-    log(f"[watch] Delay set to {delay} seconds")
+    console.log(f"[watch] Starting watcher using config: {config_path}")
+    console.log(f"[watch] Delay set to {delay} seconds")
     
     # Setup watchdog
     # Note: We need to know which directories to watch.
@@ -43,7 +44,7 @@ def run_watcher(config_path: str, parallelism: int = 1, delay: float = 30.0):
     try:
         batch_config = load_jobs_config(config_path)
     except Exception as e:
-        log(f"Error loading config: {e}")
+        console.log(f"Error loading config: {e}")
         return
 
     # Collect unique input directories
@@ -56,10 +57,10 @@ def run_watcher(config_path: str, parallelism: int = 1, delay: float = 30.0):
             watch_dirs.add(os.path.expanduser(input_dir))
             
     if not watch_dirs:
-        log("No input directories found to watch.")
+        console.log("No input directories found to watch.")
         return
 
-    log(f"[watch] Watching directories: {', '.join(watch_dirs)}")
+    console.log(f"[watch] Watching directories: {', '.join(watch_dirs)}")
     
     event_handler = DebouncedEventHandler()
     
@@ -68,7 +69,7 @@ def run_watcher(config_path: str, parallelism: int = 1, delay: float = 30.0):
         if os.path.exists(path):
             observer.schedule(event_handler, path, recursive=True)
         else:
-            log(f"[watch] Warning: Watch path does not exist: {path}")
+            console.log(f"[watch] Warning: Watch path does not exist: {path}")
 
     observer.start()
     try:
@@ -79,7 +80,7 @@ def run_watcher(config_path: str, parallelism: int = 1, delay: float = 30.0):
                 time_since_change = current_time - event_handler.last_change_time
                 
                 if time_since_change >= delay:
-                    log(f"[watch] Stability reached ({time_since_change:.1f}s >= {delay}s), processing...")
+                    console.log(f"[watch] Stability reached ({time_since_change:.1f}s >= {delay}s), processing...")
                     # Reset pending state BEFORE running to catch updates during processing
                     event_handler.has_pending_changes = False
                     # Run batches

@@ -30,7 +30,7 @@ def test_process_pages(mock_config):
     
     with patch("sn2md.converter.image_to_markdown", return_value="[Markdown Content]") as mock_i2m:
         pngs = ["page1.png", "page2.png"]
-        result = process_pages(pngs, mock_config, "model", progress=False)
+        result = process_pages(pngs, mock_config, "model")
         
         assert mock_i2m.call_count == 2
         assert "[Markdown Content]" in result
@@ -181,7 +181,7 @@ def test_process_pages_cooldown(mock_sleep, mock_i2m, mock_config):
     from sn2md.converter import process_pages
     
     pngs = ["1.png", "2.png", "3.png"]
-    process_pages(pngs, mock_config, "model", progress=False, cooldown=0.1)
+    process_pages(pngs, mock_config, "model", cooldown=0.1)
     
     # Should sleep for ALL pages (3 times total) to ensure gap between files
     assert mock_sleep.call_count == 3
@@ -189,5 +189,5 @@ def test_process_pages_cooldown(mock_sleep, mock_i2m, mock_config):
     
     # Test with cooldown 0
     mock_sleep.reset_mock()
-    process_pages(pngs, mock_config, "model", progress=False, cooldown=0.0)
+    process_pages(pngs, mock_config, "model", cooldown=0.0)
     mock_sleep.assert_not_called()
