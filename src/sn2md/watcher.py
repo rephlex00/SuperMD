@@ -17,13 +17,21 @@ class DebouncedEventHandler(FileSystemEventHandler):
         if event.is_directory:
             return
             
-        # Ignore hidden files and .DS_Store
-        filename = os.path.basename(event.src_path)
-        if filename.startswith(".") or filename == "Thumbs.db":
+        if event.event_type not in ('created', 'modified', 'moved'):
             return
 
-        if event.event_type not in ('created', 'modified'):
-            return
+        def is_hidden(path):
+            parts = path.split(os.sep)
+            return any(part.startswith(".") and part not in (".", "..") for part in parts)
+
+        # For moves, we fundamentally care about the destination
+        if event.event_type == 'moved':
+            if is_hidden(event.dest_path):
+                return
+        else:
+             # For created/modified, check source
+             if is_hidden(event.src_path):
+                 return
 
         self.last_change_time = time.time()
         if not self.has_pending_changes:
