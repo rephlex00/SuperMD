@@ -8,6 +8,8 @@ from sn2md.importers.note import convert_binary_to_image
 from sn2md.ai_utils import image_to_text
 import re
 
+from sn2md.date_utils import format_date
+
 def create_basic_context(file_basename: str, file_name: str) -> dict:
     # Try to parse date from filename (YYYYMMDD_HHMMSS or YYYYMMDD)
     # This is more reliable than filesystem ctime over sync
@@ -36,6 +38,7 @@ def create_basic_context(file_basename: str, file_name: str) -> dict:
         "year": created_at.strftime("%Y"),
         "month": created_at.strftime("%b"),
         "day": created_at.strftime("%d"),
+        "format_date": lambda fmt: format_date(created_at, fmt), # Custom helper
     }
 
 def create_notebook_context(notebook: Notebook, config: Config, model: str) -> dict:
