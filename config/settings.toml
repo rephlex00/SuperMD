@@ -75,6 +75,7 @@ If the image contains what appears to be a heading:
 template = """
 ---
 date: {{year_month_day}}
+dailynote: "[[{{ format_date('[02 Daily Notes]/YYYY/MM MMM/[Week ]WW/YYYY-MM-DD|YYYY-MM-DD') }}]]"
 type: supernote
 notefile: {{file_basename}}.note
 coverimage: attachments/{{images[0].name}}
