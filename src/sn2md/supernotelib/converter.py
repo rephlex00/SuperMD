@@ -187,7 +187,12 @@ class ImageConverter:
         try:
             info_array = json.loads(info)
         except json.JSONDecodeError:
-            return {}
+            # Newer Supernote firmware base64-encodes the LAYERINFO JSON
+            try:
+                decoded = base64.b64decode(info).decode('utf-8')
+                info_array = json.loads(decoded)
+            except Exception:
+                return {}
         for layer in info_array:
             is_bg_layer = layer.get('isBackgroundLayer')
             layer_id = layer.get('layerId')
