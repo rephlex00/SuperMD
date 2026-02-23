@@ -107,8 +107,8 @@ def test_import_supernote_file_core_flow(
 @patch("sn2md.converter.compute_file_hash", return_value="mock_hash")
 @patch("builtins.open", new_callable=mock_open)
 @patch("os.makedirs")
-@patch("os.rename")
-def test_generate_output(mock_rename, mock_makedirs, mock_file, mock_hash, mock_config):
+@patch("shutil.move")
+def test_generate_output(mock_move, mock_makedirs, mock_file, mock_hash, mock_config):
     """Test output generation (writing file and moving images)."""
     
     context = {
@@ -139,7 +139,7 @@ def test_generate_output(mock_rename, mock_makedirs, mock_file, mock_hash, mock_
     handle.write.assert_called_with("Content: content")
     
     # Verify image move
-    mock_rename.assert_called_with("/tmp/img.png", "/out/test/attachments/img.png")
+    mock_move.assert_called_with("/tmp/img.png", "/out/test/attachments/img.png")
     
     # Verify metadata update
     mock_manager.upsert_entry.assert_called()
@@ -177,14 +177,14 @@ def test_verify_metadata_file_reprocess_broken(mock_exists):
 @patch("sn2md.converter.image_to_markdown", return_value="content")
 @patch("sn2md.converter.sleep")
 def test_process_pages_cooldown(mock_sleep, mock_i2m, mock_config):
-    """Test that cooldown sleep is called correct number of times."""
+    """Test that cooldown sleep is called between pages (not before the first)."""
     from sn2md.converter import process_pages
     
     pngs = ["1.png", "2.png", "3.png"]
     process_pages(pngs, mock_config, "model", cooldown=0.1)
     
-    # Should sleep for ALL pages (3 times total) to ensure gap between files
-    assert mock_sleep.call_count == 3
+    # Should sleep between pages only (2 times for 3 pages)
+    assert mock_sleep.call_count == 2
     mock_sleep.assert_called_with(0.1)
     
     # Test with cooldown 0

@@ -58,7 +58,8 @@ def process_pages(
         if progress_bar:
              progress_bar.set_description(f"Processing Page {i+1}/{total_pages}")
         
-        if cooldown > 0:
+        # Cooldown between pages (skip the first page to avoid unnecessary delay)
+        if cooldown > 0 and i > 0:
             # Cooldown with visual feedback
             step = 0.1
             remaining = cooldown

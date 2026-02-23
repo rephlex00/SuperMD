@@ -46,12 +46,12 @@ RUN mkdir -p /data/in /data/out /config && \
 VOLUME ["/data/in", "/data/out", "/config"]
 
 # Set environment variables
+# OPENAI_API_KEY and OPENAI_MODEL are intentionally NOT set here.
+# Pass them at runtime via env_file or docker-compose environment.
 ENV SN2MD_DEFAULT_INPUT=/data/in
 ENV SN2MD_DEFAULT_OUTPUT=/data/out
 ENV SN2MD_WATCH_DELAY=30.0
 ENV PYTHONUNBUFFERED=1
-ENV OPENAI_API_KEY=""
-ENV OPENAI_MODEL="gpt-4o-mini"
 ENV PUID=1000
 ENV PGID=1000
 

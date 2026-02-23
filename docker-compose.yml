@@ -2,6 +2,8 @@ services:
   app:
     build: .
     image: sn2md-app
+    env_file:
+      - .env  # Copy example.env to .env and configure
     volumes:
       - ./in:/data/in
       - ./out:/data/out

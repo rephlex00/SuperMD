@@ -47,6 +47,9 @@ data/*
 data/supernote/*
 !data/supernote/supernotedb.sql
 
+# Test artifacts
+test_watch_dir/
+
 # Obsidian Vault
 obsidian_vault/
 

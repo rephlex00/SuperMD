@@ -17,11 +17,6 @@ fi
 
 # Ensure directories are owned by the user
 # We only chown the output and config directories. Input might be read-only.
-# Ensure directories are owned by the user
-# We only chown the output and config directories. Input might be read-only.
-
-# Ensure directories are owned by the user
-# We only chown the output and config directories. Input might be read-only.
 chown -R "$PUID":"$PGID" /data/out /config
 
 # Directory validation
