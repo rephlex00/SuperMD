@@ -1,136 +1,290 @@
-# sn2md-app
+# sn2md
 
-A unified Python application for converting Supernote files to Markdown, orchestrating batch jobs, and syncing via background service.
-
-This project replaces the legacy `sn2md-batches.sh` script with a proper Python CLI (`sn2md-cli`) and vendors the `sn2md` library to ensure stability and portability.
+Convert [Supernote](https://supernote.com/) `.note` files (and PDFs, PNGs, and Atelier `.spd` files) into Markdown using an LLM. Designed for syncing handwritten notes into an [Obsidian](https://obsidian.md/) vault.
 
 ## Features
 
-- **Batch Processing**: Run multiple conversion jobs via `jobs.yaml`.
-- **Background Watcher**: Monitors input directories and auto-converts new files using `watchdog`.
-- **Service Management**: Easily install/uninstall launchd agents on macOS.
-- **Docker Support**: Run as a containerized service with `docker-compose`.
-- **Portable**: No hardcoded paths; dependencies managed via `pyproject.toml`.
-- **Robustness**: Validates inputs, handles errors gracefully, and provides clear logs.
+- **Multi-format input** — `.note`, `.pdf`, `.png`, `.spd` (Supernote Atelier)
+- **LLM-powered transcription** — handwriting → Markdown via any [llm](https://llm.datasette.io/)-compatible model
+- **Jinja2 templates** — fully customizable Markdown output
+- **Batch jobs** — process multiple input/output folder pairs from a single YAML config
+- **File watcher** — auto-convert on file changes with configurable debounce
+- **Smart caching** — SHA-1 metadata tracking skips unchanged files and protects hand-edited output
+- **Docker-ready** — run as a long-lived container with volume mounts
 
-## Installation
+---
 
-### Local Installation
+## Prerequisites
 
-1. Install [uv](https://docs.astral.sh/uv/) if you haven't already.
+| Requirement | Direct Install | Docker |
+|---|---|---|
+| Python ≥ 3.11 | ✅ Required | — |
+| [uv](https://docs.astral.sh/uv/) | ✅ Recommended | — |
+| Docker + Compose | — | ✅ Required |
+| LLM API key | ✅ Required | ✅ Required |
 
-2. Sync the project (installs dependencies and creates `.venv`):
-   ```bash
-   uv sync
-   ```
+> **Note:** Any model supported by the [llm](https://llm.datasette.io/en/stable/plugins/index.html) ecosystem works. The default is `gpt-4o-mini` (requires an OpenAI API key).
 
-2. Bootstrap local models (if using Ollama):
-   ```bash
-   # Ensure ollama is running
-   sn2md-cli run --dry-run
-   ```
+---
 
-## Configuration
+## Quick Start — Direct (Python / uv)
 
-1. Copy the example configuration:
-   ```bash
-   cp config/jobs.example.yaml jobs.yaml
-   ```
-2. Edit `jobs.yaml` to set your input/output paths and other preferences.
-   - `input_dir`: Path to folder containing `.note` files.
-   - `output_dir`: Path where markdown files will be saved.
-   - `model`: (Optional) AI model to use for transcription.
+### 1. Clone & install
 
-## Usage
-
-### Run Batch Jobs
-Process all jobs defined in `jobs.yaml` once:
 ```bash
-sn2md-cli run
-# Or with uv:
-uv run sn2md-cli run
+git clone https://github.com/your-org/sn2md.git
+cd sn2md
+
+# Create venv and install (uv)
+uv sync
+
+# Or with pip
+python -m venv .venv
+source .venv/bin/activate
+pip install -e .
 ```
+
+### 2. Configure
+
+**Settings** — copy and edit the main config:
+
+```bash
+cp config/settings.toml ~/.config/sn2md.toml
+```
+
+Key fields in `settings.toml`:
+
+| Field | Description |
+|---|---|
+| `model` | LLM model name (default: `gpt-4o-mini`) |
+| `prompt` | System prompt for page-to-Markdown conversion |
+| `template` | Jinja2 template for the final `.md` output |
+| `output_path_template` | Directory structure template (e.g. `{{year}}/{{month}}`) |
+| `output_filename_template` | Output filename template (e.g. `{{file_basename}}.md`) |
+
+**Jobs** — define input/output folder pairs:
+
+```bash
+cp config/jobs.example.yaml config/jobs.local.yaml
+```
+
+Edit `config/jobs.local.yaml` to point at your note directories:
+
+```yaml
+defaults:
+  input: ~/Supernote/Notes
+  output: ~/Obsidian/Supernote
+  config: ./config/settings.toml
+  flags:
+    model: gpt-4o-mini
+    cooldown: 5.0    # seconds between API calls
+
+jobs:
+  - name: Personal
+    input: ~/Supernote/Note/Personal
+    output: ~/Obsidian/Personal/Supernote
+  - name: Work
+    input: ~/Supernote/Note/Work
+    output: ~/Obsidian/Work/Supernote
+```
+
+### 3. Set your API key
+
+```bash
+export OPENAI_API_KEY="sk-..."
+```
+
+Or place it in a `.env` file referenced by `env_file:` in your jobs config.
+
+### 4. Run
+
+```bash
+# Convert a single file
+sn2md-cli file path/to/note.note -o ./output
+
+# Convert a directory
+sn2md-cli directory path/to/notes/ -o ./output
+
+# Run all configured jobs
+sn2md-cli run --config config/jobs.local.yaml
+
+# Watch for changes and auto-convert
+sn2md-cli watch --config config/jobs.local.yaml
+```
+
+---
+
+## Quick Start — Docker
+
+### 1. Configure environment
+
+```bash
+cp example.env .env
+```
+
+Edit `.env` and set at minimum:
+
+```env
+OPENAI_API_KEY=sk-...
+OPENAI_MODEL=gpt-4o-mini
+PUID=1000
+PGID=1000
+```
+
+> **Tip:** Run `id` on your host to find your UID/GID. Setting `PUID`/`PGID` ensures output files are owned by your user.
+
+### 2. Prepare directories
+
+```bash
+mkdir -p in out
+```
+
+Place your `.note` files (or symlink your Supernote sync folder) into `./in/`.
+
+### 3. Build & run
+
+```bash
+docker compose up -d
+```
+
+This will:
+- Build the `sn2md-app` image
+- Mount `./in` → `/data/in` (input), `./out` → `/data/out` (output), `./config` → `/config`
+- Start the file watcher, which processes new/changed files automatically
+
+### 4. Custom job configuration (optional)
+
+To define multiple jobs or override settings inside the container:
+
+```bash
+cp config/jobs.docker.example.yaml config/jobs.yaml
+```
+
+Edit `config/jobs.yaml`, then mount it:
+
+```yaml
+# docker-compose.yml (already mounts ./config:/config)
+# The entrypoint auto-detects /config/jobs.yaml if present.
+```
+
+You can also mount a custom `settings.toml`:
+
+```yaml
+volumes:
+  - ./config/settings.toml:/config/settings.toml
+```
+
+And reference it in your `jobs.yaml`:
+
+```yaml
+defaults:
+  config: /config/settings.toml
+```
+
+### 5. View logs
+
+```bash
+docker compose logs -f app
+```
+
+---
+
+## CLI Reference
+
+```
+Usage: sn2md-cli [OPTIONS] COMMAND [ARGS]...
+
 Options:
-- `--dry-run`: Preview actions without writing files.
-- `--jobs N`: Run `N` jobs in parallel (default: 1).
-- `--config path/to/jobs.yaml`: Use a different config file.
-
-### Watch Mode
-Watch input directories for changes and auto-run conversions:
-```bash
-sn2md-cli watch --config jobs.yaml
+  -c, --config PATH       Path to sn2md.toml config
+  -o, --output PATH       Output directory (default: supernote)
+  -f, --force             Force reprocessing of unchanged files
+  --progress/--no-progress  Show progress bar (default: on)
+  -l, --level TEXT        Log level: DEBUG, INFO, WARNING, ERROR
+  -m, --model TEXT        LLM model override
+  -v, --version           Show version
 ```
 
-### Background Service (macOS)
-Install the watcher as a background LaunchAgent so it runs automatically:
+| Command | Description |
+|---|---|
+| `file <path>` | Convert a single file |
+| `directory <path>` | Convert all supported files in a directory |
+| `run` | Run batch jobs from a YAML config |
+| `watch` | Watch input directories and auto-convert on changes |
+| `meta list` | List tracked files and their status |
+| `meta rebuild` | Rebuild metadata from existing input/output pairs |
+| `meta rm` | Remove all metadata (reset tracking) |
+| `service install` | Install as a macOS launchd service |
+| `service uninstall` | Remove the launchd service |
+| `service start/stop` | Start or stop the service |
+| `service logs` | View service log output |
 
-1. Install the service:
-   ```bash
-   sn2md-cli service install
-   ```
-2. Check status:
-   ```bash
-   sn2md-cli service status
-   ```
-3. View logs:
-   ```bash
-   sn2md-cli service logs
-   ```
-4. Uninstall:
-   ```bash
-   sn2md-cli service uninstall
-   ```
+---
 
-Note: Logs are written to `~/Library/Logs/sn2md-watch.log`.
+## Template Variables
 
-## Docker Usage
+The following variables are available in both `output_path_template`, `output_filename_template`, and the main `template`:
 
-Run the application in a container to avoid dependency issues.
+| Variable | Example | Description |
+|---|---|---|
+| `file_basename` | `20250104_080151` | Input filename without extension |
+| `file_name` | `/path/to/file.note` | Full input path |
+| `year_month_day` | `2025-01-04` | Creation date (YYYY-MM-DD) |
+| `year` | `2025` | 4-digit year |
+| `month` | `Jan` | Abbreviated month |
+| `day` | `04` | Zero-padded day |
+| `format_date(fmt)` | `format_date('YYYY-MM-DD')` | Obsidian-style date formatting |
+| `llm_output` | *(markdown text)* | The LLM transcription |
+| `images` | *(list)* | Extracted page images with `.name`, `.link`, `.rel_path` |
+| `links` | *(list)* | Notebook internal links |
+| `keywords` | *(list)* | Notebook keywords |
+| `titles` | *(list)* | Notebook title annotations |
 
-1. **Build the image**:
-   ```bash
-   docker-compose build
-   ```
+---
 
-2. **Configure volumes**:
-   Update `docker-compose.yml` to map your local directories to the container:
-   ```yaml
-   volumes:
-     - /path/to/local/in:/data/in
-     - /path/to/local/out:/data/out
-     - ./config:/config
-   ```
+## Development
 
-3. **Run the watcher**:
-   ```bash
-   docker-compose up -d
-   ```
+### Install with test dependencies
 
-4. **View logs**:
-   ```bash
-   docker-compose logs -f
-   docker-compose logs -f
-   ```
+```bash
+uv sync --extra test
+# or
+pip install -e ".[test]"
+```
 
-5. **Permission Management (Linux)**:
-   If you encounter permission issues on Linux, you can set the `PUID` and `PGID` environment variables to match your host user's IDs (usually 1000).
-   In `docker-compose.yml`:
-   ```yaml
-   environment:
-     - PUID=1000
-     - PGID=1000
-   ```
+### Run tests
 
-## Supernote Private Cloud Integration
+```bash
+python -m pytest tests/ -v
+```
 
-You can run `sn2md` alongside the official **Supernote Private Cloud** containers. This allows you to sync your files directly from your Supernote device to your self-hosted cloud, where they will be automatically picked up and converted by `sn2md`.
+### Project structure
 
-For detailed setup instructions, including SSL configuration and Obsidian auto-sync, see the dedicated documentation:
-👉 **[Supernote Private Cloud Setup Guide](README.sn-cloud.md)**
+```
+src/sn2md/
+├── cli.py           # Click CLI entry point
+├── converter.py     # Core conversion pipeline
+├── batches.py       # Multi-job batch runner
+├── watcher.py       # File system watcher (watchdog)
+├── context.py       # Jinja2 template context builder
+├── ai_utils.py      # LLM integration (llm library)
+├── metadata_db.py   # SQLite metadata tracking
+├── job_config.py    # YAML job config loader
+├── service.py       # macOS launchd service management
+├── types.py         # Config dataclass & extractor ABC
+├── console.py       # Styled console output
+├── report.py        # Metadata report printer
+├── date_utils.py    # Obsidian-style date formatting
+├── utils.py         # Hashing & path utilities
+├── importers/
+│   ├── note.py      # Supernote .note extractor
+│   ├── pdf.py       # PDF extractor (PyMuPDF)
+│   ├── png.py       # PNG passthrough extractor
+│   └── atelier.py   # Supernote Atelier .spd extractor
+└── supernotelib/    # Vendored Supernote parsing library
+```
 
-## Troubleshooting
+---
 
-- **Command not found**: Ensure you run commands with `uv run` or activate the environment.
-- **ModuleNotFoundError**: Run `uv sync` to ensure dependencies are installed.
-- **Permissions**: Grant Full Disk Access to your terminal or python executable if accessing protected folders (like `~/Library/Containers`).
-- **Docker**: Ensure Docker Desktop is running. If file changes aren't detected, try restarting the container.
+## License
+
+Apache-2.0

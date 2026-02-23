@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "sn2md-app"
-version = "0.1.0"
+version = "2.5.0"
 description = "Supernote to Markdown converter and sync tool"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -40,3 +40,7 @@ sn2md-cli = "sn2md.cli:cli"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]

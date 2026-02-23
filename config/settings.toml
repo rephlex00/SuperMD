@@ -78,7 +78,7 @@ date: {{year_month_day}}
 dailynote: "[[{{ format_date('[02 Daily Notes]/YYYY/MM MMM/[Week ]WW/YYYY-MM-DD|YYYY-MM-DD') }}]]"
 type: supernote
 notefile: {{file_basename}}.note
-coverimage: attachments/{{images[0].name}}
+{% if images %}coverimage: attachments/{{images[0].name}}{% endif %}
 ignoresnlock: false
 tasksignore: true
 tags: handwritten
