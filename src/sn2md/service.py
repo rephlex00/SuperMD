@@ -29,6 +29,8 @@ PLIST_TEMPLATE = """<?xml version="1.0" encoding="UTF-8"?>
       <string>$PATH_VAR</string>
       <key>PYTHONPATH</key>
       <string>$PYTHONPATH</string>
+      <key>NO_COLOR</key>
+      <string>1</string>
     </dict>
 
     <key>RunAtLoad</key>
@@ -39,7 +41,7 @@ PLIST_TEMPLATE = """<?xml version="1.0" encoding="UTF-8"?>
     <key>StandardOutPath</key>
     <string>$HOME/Library/Logs/sn2md-watch.log</string>
     <key>StandardErrorPath</key>
-    <string>$HOME/Library/Logs/sn2md-watch.err</string>
+    <string>$HOME/Library/Logs/sn2md-watch.log</string>
   </dict>
 </plist>
 """
