@@ -80,7 +80,7 @@ type: supernote
 notefile: {{file_basename}}.note
 {% if images %}coverimage: attachments/{{images[0].name}}{% endif %}
 ignoresnlock: false
-tasksignore: true
+ignoretasks: true
 tags: handwritten
 ---
 {{llm_output}}
