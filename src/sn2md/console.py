@@ -23,11 +23,31 @@ class Console:
         for h in root_logger.handlers[:]:
             root_logger.removeHandler(h)
 
-        # Create a handler that writes to tqdm.write (stderr/stdout safe)
-        # But we will do manual formatting in our log method mainly.
-        # However, for library logs (like urllib), we might want a standard handler.
-        # For now, let's keep it simple: our tool uses explicit console.log
-        pass
+        class ConsoleHandler(logging.Handler):
+            def __init__(self, console_instance):
+                super().__init__()
+                self.console = console_instance
+
+            def emit(self, record):
+                try:
+                    msg = self.format(record)
+                    # Don't recurse if the log came from our console logger
+                    if record.name != "sn2md":
+                        # We use simple info logging for standard library stuff unless it's an error
+                        if record.levelno >= logging.ERROR:
+                            self.console.error(f"[{record.name}] {msg}")
+                        elif record.levelno >= logging.WARNING:
+                            self.console.warning(f"[{record.name}] {msg}")
+                        elif record.levelno == logging.DEBUG:
+                            self.console.debug(f"[{record.name}] {msg}")
+                        else:
+                            self.console.log(f"[{record.name}] {msg}", fg="bright_black")
+                except Exception:
+                    self.handleError(record)
+
+        # Create a handler that redirects to our console
+        handler = ConsoleHandler(self)
+        root_logger.addHandler(handler)
 
     def set_level(self, level: str | int):
         if isinstance(level, str):
@@ -54,9 +74,9 @@ class Console:
             # Explicit color override
             lines = msg.splitlines()
             first = lines[0]
-            tqdm.write(f"{ts_colored} {click.style(first, fg=fg, bold=bold)}")
+            tqdm.write(f"{ts_colored} {click.style(first, fg=fg, bold=bold)}", file=sys.stdout)
             for line in lines[1:]:
-                tqdm.write(f"{indent_str}{click.style(line, fg=fg)}")
+                tqdm.write(f"{indent_str}{click.style(line, fg=fg)}", file=sys.stdout)
             return
 
         # 1. Parse Tag/Level from first line if present
@@ -119,9 +139,9 @@ class Console:
         body_colored = style_body(body_str)
         
         if tag_colored:
-            tqdm.write(f"{ts_colored} {tag_colored} {body_colored}")
+            tqdm.write(f"{ts_colored} {tag_colored} {body_colored}", file=sys.stdout)
         else:
-            tqdm.write(f"{ts_colored} {body_colored}")
+            tqdm.write(f"{ts_colored} {body_colored}", file=sys.stdout)
             
         full_indent = indent_str + tag_sub_indent
         
@@ -134,7 +154,7 @@ class Console:
             elif "Error" in stripped:
                  styled_line = click.style(line, fg="red")
             
-            tqdm.write(f"{full_indent}{styled_line}")
+            tqdm.write(f"{full_indent}{styled_line}", file=sys.stdout)
 
     def debug(self, msg: str):
         if self.debug_mode:
