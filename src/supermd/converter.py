@@ -3,6 +3,7 @@ import shutil
 import os
 import posixpath
 import json
+from pathlib import Path
 from typing import Generator
 from time import sleep, monotonic
 from contextlib import contextmanager
@@ -112,6 +113,17 @@ def process_pages(
     return template_output
 
 
+def _calculate_output_path(config: SuperMDConfig, context: dict, output: str) -> str:
+    ctime = context.get("ctime")
+
+    def preprocess(s: str) -> str:
+        return expand_date_tokens(s, ctime) if ctime else s
+
+    output_filename = Template(preprocess(config.output_filename_template)).render(context)
+    output_path = Template(preprocess(config.output_path_template)).render(context)
+    return os.path.join(output, output_path, output_filename)
+
+
 def generate_output(
     pngs: list[str],
     config: SuperMDConfig,
@@ -122,11 +134,6 @@ def generate_output(
     metadata_manager: MetadataManager,
     input_hash: str,
 ) -> None:
-    ctime = context.get("ctime")
-
-    def preprocess(s: str) -> str:
-        return expand_date_tokens(s, ctime) if ctime else s
-
     jinja_markdown = template.render(context)
 
     for image in context.get("images", []):
@@ -138,17 +145,11 @@ def generate_output(
             if needle in jinja_markdown and replacement not in jinja_markdown:
                 jinja_markdown = jinja_markdown.replace(needle, replacement)
 
-    output_filename_template = Template(preprocess(config.output_filename_template))
-    output_filename = output_filename_template.render(context)
-
-    output_path_template = Template(preprocess(config.output_path_template))
-    output_path = output_path_template.render(context)
-    output_path = os.path.join(output, output_path)
+    output_path_and_file = _calculate_output_path(config, context, output)
+    output_path = os.path.dirname(output_path_and_file)
     os.makedirs(output_path, exist_ok=True)
     image_output_dir = os.path.join(output_path, "attachments")
     os.makedirs(image_output_dir, exist_ok=True)
-
-    output_path_and_file = os.path.join(output_path, output_filename)
     with open(output_path_and_file, "w") as f:
         _ = f.write(jinja_markdown)
     console.debug(f"Wrote output to {shorten_path(output_path_and_file)}")
@@ -174,10 +175,8 @@ def generate_output(
 
     # Update metadata
     output_hash = compute_file_hash(output_path_and_file)
-    
-    output_path_template_original = Template(preprocess(config.output_path_template))
-    rel_path_dir = output_path_template_original.render(context)
-    expected_rel_path = os.path.join(rel_path_dir, output_filename)
+    output_filename = os.path.basename(output_path_and_file)
+    expected_rel_path = os.path.relpath(output_path_and_file, output)
 
     metadata_manager.upsert_entry(
         input_note_filename=os.path.basename(file_name),
@@ -271,12 +270,21 @@ def convert_file(
 
         input_hash = compute_file_hash(file_name)
 
+        file_basename = os.path.splitext(os.path.basename(file_name))[0]
+        basic_context = create_basic_context(file_basename, file_name)
+
         # Verification (raises exception if unchanged/locked)
         if not force:
             verify_metadata_file(metadata_manager, file_name, input_hash, dry_run=dry_run)
 
         if dry_run:
-            console.log(f"[dry-run] Would process {shorten_path(file_name)}", fg="green")
+            calculated_output = _calculate_output_path(config, basic_context, output)
+            vault_root = Path(os.path.expanduser(output)).parent.parent
+            vault_rel = os.sep + os.path.relpath(calculated_output, vault_root)
+            console.log(
+                f"[dry-run] Would process {shorten_path(file_name)} --> {vault_rel}",
+                fg="green"
+            )
             return
 
         # Prepare for processing
@@ -298,8 +306,6 @@ def convert_file(
              console.debug(f"Image cleanup skipped: {e}")
 
         model = model if model else config.model
-        file_basename = os.path.splitext(os.path.basename(file_name))[0]
-        basic_context = create_basic_context(file_basename, file_name)
         ctime = basic_context.get("ctime")
         template_str = expand_date_tokens(config.template, ctime) if ctime else config.template
         template = Template(template_str)
