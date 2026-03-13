@@ -1,7 +1,6 @@
 .DS_Store
-.env
-in/
-out/
+
+# Local config (use supermd.example.yaml as template)
 config/supermd.yaml
 
 # Python
@@ -25,6 +24,7 @@ wheels/
 *.egg-info/
 .installed.cfg
 *.egg
+.pytest_cache/
 MANIFEST
 
 # Virtual Environments
@@ -40,10 +40,8 @@ venv.bak/
 .vscode/
 .idea/
 
-# Test artifacts
-test_watch_dir/
+# Claude
+.claude/
 
-# Obsidian Vault
-obsidian_vault/
-
+# Secrets
 secrets/
