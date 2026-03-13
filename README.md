@@ -1,4 +1,4 @@
-# sn2md
+# SuperMD
 
 Convert [Supernote](https://supernote.com/) `.note` files (and PDFs, PNGs, and Atelier `.spd` files) into Markdown using an LLM. Designed for syncing handwritten notes into an [Obsidian](https://obsidian.md/) vault.
 
@@ -10,30 +10,28 @@ Convert [Supernote](https://supernote.com/) `.note` files (and PDFs, PNGs, and A
 - **Batch jobs** — process multiple input/output folder pairs from a single YAML config
 - **File watcher** — auto-convert on file changes with configurable debounce
 - **Smart caching** — SHA-1 metadata tracking skips unchanged files and protects hand-edited output
-- **Docker-ready** — run as a long-lived container with volume mounts
 
 ---
 
 ## Prerequisites
 
-| Requirement | Direct Install | Docker |
-|---|---|---|
-| Python ≥ 3.11 | ✅ Required | — |
-| [uv](https://docs.astral.sh/uv/) | ✅ Recommended | — |
-| Docker + Compose | — | ✅ Required |
-| LLM API key | ✅ Required | ✅ Required |
+| Requirement | Notes |
+|---|---|
+| Python ≥ 3.11 | Required |
+| [uv](https://docs.astral.sh/uv/) | Recommended |
+| LLM API key | Required |
 
 > **Note:** Any model supported by the [llm](https://llm.datasette.io/en/stable/plugins/index.html) ecosystem works. The default is `gpt-4o-mini` (requires an OpenAI API key).
 
 ---
 
-## Quick Start — Direct (Python / uv)
+## Quick Start
 
 ### 1. Clone & install
 
 ```bash
-git clone https://github.com/your-org/sn2md.git
-cd sn2md
+git clone https://github.com/your-org/supermd.git
+cd supermd
 
 # Create venv and install (uv)
 uv sync
@@ -46,47 +44,22 @@ pip install -e .
 
 ### 2. Configure
 
-**Settings** — copy and edit the main config:
+Copy and edit the example config:
 
 ```bash
-cp config/settings.toml ~/.config/sn2md.toml
+cp config/supermd.example.yaml config/supermd.yaml
 ```
 
-Key fields in `settings.toml`:
+Key fields in `supermd.yaml`:
 
 | Field | Description |
 |---|---|
 | `model` | LLM model name (default: `gpt-4o-mini`) |
 | `prompt` | System prompt for page-to-Markdown conversion |
 | `template` | Jinja2 template for the final `.md` output |
-| `output_path_template` | Directory structure template (e.g. `{{year}}/{{month}}`) |
+| `output_path_template` | Directory structure template (e.g. `{{ format_date('YYYY/MM MMM') }}`) |
 | `output_filename_template` | Output filename template (e.g. `{{file_basename}}.md`) |
-
-**Jobs** — define input/output folder pairs:
-
-```bash
-cp config/jobs.example.yaml config/jobs.local.yaml
-```
-
-Edit `config/jobs.local.yaml` to point at your note directories:
-
-```yaml
-defaults:
-  input: ~/Supernote/Notes
-  output: ~/Obsidian/Supernote
-  config: ./config/settings.toml
-  flags:
-    model: gpt-4o-mini
-    cooldown: 5.0    # seconds between API calls
-
-jobs:
-  - name: Personal
-    input: ~/Supernote/Note/Personal
-    output: ~/Obsidian/Personal/Supernote
-  - name: Work
-    input: ~/Supernote/Note/Work
-    output: ~/Obsidian/Work/Supernote
-```
+| `jobs` | List of input/output folder pairs for batch processing |
 
 ### 3. Set your API key
 
@@ -94,97 +67,20 @@ jobs:
 export OPENAI_API_KEY="sk-..."
 ```
 
-Or place it in a `.env` file referenced by `env_file:` in your jobs config.
-
 ### 4. Run
 
 ```bash
 # Convert a single file
-sn2md-cli file path/to/note.note -o ./output
+supermd file path/to/note.note -o ./output
 
 # Convert a directory
-sn2md-cli directory path/to/notes/ -o ./output
+supermd directory path/to/notes/ -o ./output
 
 # Run all configured jobs
-sn2md-cli run --config config/jobs.local.yaml
+supermd run --config config/supermd.yaml
 
 # Watch for changes and auto-convert
-sn2md-cli watch --config config/jobs.local.yaml
-```
-
----
-
-## Quick Start — Docker
-
-### 1. Configure environment
-
-```bash
-cp example.env .env
-```
-
-Edit `.env` and set at minimum:
-
-```env
-OPENAI_API_KEY=sk-...
-OPENAI_MODEL=gpt-4o-mini
-PUID=1000
-PGID=1000
-```
-
-> **Tip:** Run `id` on your host to find your UID/GID. Setting `PUID`/`PGID` ensures output files are owned by your user.
-
-### 2. Prepare directories
-
-```bash
-mkdir -p in out
-```
-
-Place your `.note` files (or symlink your Supernote sync folder) into `./in/`.
-
-### 3. Build & run
-
-```bash
-docker compose up -d
-```
-
-This will:
-- Build the `sn2md-app` image
-- Mount `./in` → `/data/in` (input), `./out` → `/data/out` (output), `./config` → `/config`
-- Start the file watcher, which processes new/changed files automatically
-
-### 4. Custom job configuration (optional)
-
-To define multiple jobs or override settings inside the container:
-
-```bash
-cp config/jobs.docker.example.yaml config/jobs.yaml
-```
-
-Edit `config/jobs.yaml`, then mount it:
-
-```yaml
-# docker-compose.yml (already mounts ./config:/config)
-# The entrypoint auto-detects /config/jobs.yaml if present.
-```
-
-You can also mount a custom `settings.toml`:
-
-```yaml
-volumes:
-  - ./config/settings.toml:/config/settings.toml
-```
-
-And reference it in your `jobs.yaml`:
-
-```yaml
-defaults:
-  config: /config/settings.toml
-```
-
-### 5. View logs
-
-```bash
-docker compose logs -f app
+supermd watch --config config/supermd.yaml
 ```
 
 ---
@@ -192,10 +88,10 @@ docker compose logs -f app
 ## CLI Reference
 
 ```
-Usage: sn2md-cli [OPTIONS] COMMAND [ARGS]...
+Usage: supermd [OPTIONS] COMMAND [ARGS]...
 
 Options:
-  -c, --config PATH       Path to sn2md.toml config
+  -c, --config PATH       Path to supermd.yaml config
   -o, --output PATH       Output directory (default: supernote)
   -f, --force             Force reprocessing of unchanged files
   --progress/--no-progress  Show progress bar (default: on)
@@ -260,7 +156,7 @@ python -m pytest tests/ -v
 ### Project structure
 
 ```
-src/sn2md/
+src/supermd/
 ├── cli.py           # Click CLI entry point
 ├── converter.py     # Core conversion pipeline
 ├── batches.py       # Multi-job batch runner
@@ -268,9 +164,9 @@ src/sn2md/
 ├── context.py       # Jinja2 template context builder
 ├── ai_utils.py      # LLM integration (llm library)
 ├── metadata_db.py   # SQLite metadata tracking
-├── job_config.py    # YAML job config loader
+├── config.py        # Unified YAML config loader
 ├── service.py       # macOS launchd service management
-├── types.py         # Config dataclass & extractor ABC
+├── types.py         # Extractor ABC
 ├── console.py       # Styled console output
 ├── report.py        # Metadata report printer
 ├── date_utils.py    # Obsidian-style date formatting

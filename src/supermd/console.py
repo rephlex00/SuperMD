@@ -6,7 +6,7 @@ from datetime import datetime
 import click
 from tqdm import tqdm
 
-logger = logging.getLogger("sn2md")
+logger = logging.getLogger("supermd")
 
 class Console:
     def __init__(self):
@@ -32,7 +32,7 @@ class Console:
                 try:
                     msg = self.format(record)
                     # Don't recurse if the log came from our console logger
-                    if record.name != "sn2md":
+                    if record.name != "supermd":
                         # We use simple info logging for standard library stuff unless it's an error
                         if record.levelno >= logging.ERROR:
                             self.console.error(f"[{record.name}] {msg}")

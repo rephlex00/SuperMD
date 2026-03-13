@@ -3,10 +3,10 @@ import os
 from typing import Callable
 from unittest.mock import patch
 
-from sn2md.types import ImageExtractor
+from supermd.types import ImageExtractor
 
-import sn2md.supernotelib as sn
-from sn2md.supernotelib.converter import ImageConverter, VisibilityOverlay
+import supermd.supernotelib as sn
+from supermd.supernotelib.converter import ImageConverter, VisibilityOverlay
 
 logger = logging.getLogger(__name__)
 

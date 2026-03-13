@@ -1,5 +1,5 @@
 import os
-from sn2md.service import generate_plist
+from supermd.service import generate_plist
 
 def test_generate_plist(mock_workspace):
     """Verify plist content generation."""
@@ -13,7 +13,7 @@ def test_generate_plist(mock_workspace):
     
     assert "<?xml" in plist
     assert "<key>Label</key>" in plist
-    assert "<string>com.sn2md.watch</string>" in plist
+    assert "<string>com.supermd.watch</string>" in plist
     
     # Check arguments
     assert "<string>watch</string>" in plist

@@ -10,7 +10,7 @@ PLIST_TEMPLATE = """<?xml version="1.0" encoding="UTF-8"?>
 <plist version="1.0">
   <dict>
     <key>Label</key>
-    <string>com.sn2md.watch</string>
+    <string>com.supermd.watch</string>
 
     <key>ProgramArguments</key>
     <array>
@@ -41,9 +41,9 @@ PLIST_TEMPLATE = """<?xml version="1.0" encoding="UTF-8"?>
     <true/>
 
     <key>StandardOutPath</key>
-    <string>$HOME/Library/Logs/sn2md-watch.log</string>
+    <string>$HOME/Library/Logs/supermd-watch.log</string>
     <key>StandardErrorPath</key>
-    <string>$HOME/Library/Logs/sn2md-watch.log</string>
+    <string>$HOME/Library/Logs/supermd-watch.log</string>
   </dict>
 </plist>
 """
@@ -52,20 +52,20 @@ def generate_plist(config_path: str):
     project_dir = os.getcwd()
     home_dir = os.path.expanduser("~")
     
-    # Path to the sn2md-cli executable
+    # Path to the supermd executable
     # We want the absolute path to the executable running this script
-    sn2md_cli_path = sys.executable 
-    # Actually, we are running via `python -m sn2md_app.cli`, but usually we want
+    supermd_cli_path = sys.executable 
+    # Actually, we are running via `python -m supermd.cli`, but usually we want
     # the entry script if it exists. 
-    # However, forcing the python executable + `-m sn2md_app.cli` or similar is safer
+    # However, forcing the python executable + `-m supermd.cli` or similar is safer
     # than relying on a shim that might move.
     # BUT, the pyproject.toml defines a script. Let's try to find it.
     
     # Best bet for now: verify if sys.executable is the venv python.
-    # Logic: <venv>/bin/python -> <venv>/bin/sn2md-cli
+    # Logic: <venv>/bin/python -> <venv>/bin/supermd
     
     python_bin = Path(sys.executable)
-    possible_cli = python_bin.parent / "sn2md-cli"
+    possible_cli = python_bin.parent / "supermd"
     
     if possible_cli.exists():
         executable = str(possible_cli)
@@ -74,7 +74,7 @@ def generate_plist(config_path: str):
         # Arguments array needs to be constructed differently if we do this, 
         # but the template assumes a single executable string.
         # Let's assume the pip install worked and user has the bin on path or we find it relative.
-        executable = shutil.which("sn2md-cli") or str(possible_cli)
+        executable = shutil.which("supermd") or str(possible_cli)
 
     env_path = os.environ.get("PATH", "")
     python_path = os.environ.get("PYTHONPATH", str(Path(project_dir) / "src"))
@@ -95,7 +95,7 @@ def install_service(config_path: str = "config/jobs.local.yaml", dry_run: bool =
     plist = generate_plist(config_path)
     
     dest_dir = os.path.expanduser("~/Library/LaunchAgents")
-    dest_path = os.path.join(dest_dir, "com.sn2md.watch.plist")
+    dest_path = os.path.join(dest_dir, "com.supermd.watch.plist")
     
     if dry_run:
         print(f"[dry-run] Would write plist to: {dest_path}")
@@ -127,7 +127,7 @@ def install_service(config_path: str = "config/jobs.local.yaml", dry_run: bool =
         print(f"  launchctl load {dest_path}")
     
 def uninstall_service():
-    dest_path = os.path.expanduser("~/Library/LaunchAgents/com.sn2md.watch.plist")
+    dest_path = os.path.expanduser("~/Library/LaunchAgents/com.supermd.watch.plist")
     if os.path.exists(dest_path):
         subprocess.run(["launchctl", "unload", dest_path], check=False)
         os.remove(dest_path)
@@ -136,7 +136,7 @@ def uninstall_service():
         print("Service not installed.")
 
 def status_service():
-    dest_path = os.path.expanduser("~/Library/LaunchAgents/com.sn2md.watch.plist")
+    dest_path = os.path.expanduser("~/Library/LaunchAgents/com.supermd.watch.plist")
     
     # Check if plist exists
     installed = os.path.exists(dest_path)
@@ -146,7 +146,7 @@ def status_service():
     try:
         # launchctl list returns 0 if found, non-zero if not found
         result = subprocess.run(
-            ["launchctl", "list", "com.sn2md.watch"],
+            ["launchctl", "list", "com.supermd.watch"],
             capture_output=True,
             text=True,
             check=False
@@ -172,10 +172,10 @@ def status_service():
         print(f"Error checking status: {e}")
 
 def start_service():
-    dest_path = os.path.expanduser("~/Library/LaunchAgents/com.sn2md.watch.plist")
+    dest_path = os.path.expanduser("~/Library/LaunchAgents/com.supermd.watch.plist")
     if not os.path.exists(dest_path):
         print(f"Service plist not found at: {dest_path}")
-        print("Please run 'sn2md-cli service install' first.")
+        print("Please run 'supermd service install' first.")
         return
 
     try:
@@ -189,7 +189,7 @@ def start_service():
              print(f"Error starting service: {e.stderr.strip()}")
 
 def stop_service():
-    dest_path = os.path.expanduser("~/Library/LaunchAgents/com.sn2md.watch.plist")
+    dest_path = os.path.expanduser("~/Library/LaunchAgents/com.supermd.watch.plist")
     
     # We can try to unload even if plist is missing if we know the label, 
     # but launchctl unload typically assumes the plist path for user agents.
@@ -211,7 +211,7 @@ def stop_service():
              print(f"Error stopping service: {e.stderr.strip()}")
 
 def logs_service(lines: int = 10, follow: bool = False):
-    log_path = os.path.expanduser("~/Library/Logs/sn2md-watch.log")
+    log_path = os.path.expanduser("~/Library/Logs/supermd-watch.log")
     
     if not os.path.exists(log_path):
         print(f"Log file not found at: {log_path}")

@@ -1,7 +1,7 @@
 import time
 import os
 from unittest.mock import MagicMock
-from sn2md.watcher import DebouncedEventHandler
+from supermd.watcher import DebouncedEventHandler
 
 def test_debounced_event_handler_basic():
     """Verify handler updates state on standard events."""

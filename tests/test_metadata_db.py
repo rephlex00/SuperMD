@@ -4,7 +4,7 @@ import tempfile
 import shutil
 import os
 import sqlite3
-from sn2md.metadata_db import MetadataManager
+from supermd.metadata_db import MetadataManager
 
 class TestMetadataManager(unittest.TestCase):
     def setUp(self):

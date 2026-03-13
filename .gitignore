@@ -2,8 +2,7 @@
 .env
 in/
 out/
-config/jobs.local.yaml
-config/rclone.conf
+config/supermd.yaml
 
 # Python
 __pycache__/
@@ -41,22 +40,10 @@ venv.bak/
 .vscode/
 .idea/
 
-# Supernote Cloud Data
-data/*
-!data/supernote/
-data/supernote/*
-!data/supernote/supernotedb.sql
-
 # Test artifacts
 test_watch_dir/
 
 # Obsidian Vault
 obsidian_vault/
 
-# Environment Files
-sn-cloud.env
-
-# Config directories
-config/obsidian/
-config/webdav/
 secrets/
