@@ -231,7 +231,7 @@ src/supermd/
 
 ### sn2md
 
-SuperMD is based on [sn2md](https://github.com/thecowcoder/sn2md), a Supernote-to-Markdown converter by thecowcoder. SuperMD extends that foundation with batch processing, file watching, a macOS launchd service, unified YAML configuration, smart caching, and multi-format input support.
+SuperMD is based on [sn2md](https://github.com/dsummersl/sn2md), a Supernote-to-Markdown converter by dsummersl. SuperMD extends that foundation with batch processing, file watching, a macOS launchd service, unified YAML configuration, smart caching, and multi-format input support.
 
 ### Vendored packages
 
