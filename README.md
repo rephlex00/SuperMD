@@ -181,6 +181,22 @@ src/supermd/
 
 ---
 
+## Acknowledgements
+
+### sn2md
+
+SuperMD is based on [sn2md](https://github.com/thecowcoder/sn2md), a Supernote-to-Markdown converter by thecowcoder. SuperMD extends that foundation with batch processing, file watching, a macOS launchd service, unified YAML configuration, smart caching, and multi-format input support.
+
+### Vendored packages
+
+SuperMD vendors the following libraries directly into its source tree rather than declaring them as installable dependencies. This avoids version conflicts and ensures compatibility with the specific Supernote file format revisions that SuperMD targets.
+
+| Package | Location | Upstream | Reason for vendoring |
+|---|---|---|---|
+| `supernotelib` | `src/supermd/supernotelib/` | [jya-dev/supernote-tool](https://github.com/jya-dev/supernote-tool) (Apache-2.0, © 2020 jya) | Vendored to apply patches for blank-image edge cases and to pin to a specific format revision without depending on an upstream release cadence |
+
+---
+
 ## License
 
 Apache-2.0
