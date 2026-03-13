@@ -29,7 +29,7 @@ note_title_prompt: |
 # --------------------------------
 
 output_filename_template: "{{file_basename}}.md"
-output_path_template: "{{ format_date('YYYY/MM MMM') }}"
+output_path_template: "{{DATE:YYYY/MM MMM}}"
 
 # --------------------------------
 # Page → Markdown Conversion
@@ -77,8 +77,8 @@ prompt: |
 
 template: |
   ---
-  date: {{ format_date('YYYY-MM-DD[T]HHmmss') }}
-  dailynote: "[[{{ format_date('[Moments]/YYYY/MM MMM/YYMMDD dddd') }}]]"
+  date: {{DATE:YYYY-MM-DD[T]HHmmss}}
+  dailynote: "[[{{DATE:[Moments]/YYYY/MM MMM/YYMMDD dddd}}]]"
   title: "{{title}}"
   type: supernote
   notefile: {{file_basename}}.note

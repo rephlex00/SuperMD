@@ -15,6 +15,7 @@ from .converter import (
 
 from .config import SuperMDConfig, load_config
 from .metadata_db import InputNotChangedError, OutputChangedError
+from .ai_utils import MissingAPIKeyError, validate_model_key
 
 from supermd.console import console
 
@@ -92,6 +93,14 @@ def convert_file_cmd(ctx, filename: str) -> None:
     force = ctx.obj["force"]
     progress = ctx.obj["progress"]
     model = ctx.obj["model"]
+
+    effective_model = model or config.model
+    try:
+        validate_model_key(effective_model)
+    except MissingAPIKeyError as e:
+        console.error(str(e))
+        sys.exit(1)
+
     try:
 
         if progress:
@@ -140,6 +149,14 @@ def convert_directory_cmd(ctx, directory: str) -> None:
     force = ctx.obj["force"]
     progress = ctx.obj["progress"]
     model = ctx.obj["model"]
+
+    effective_model = model or config.model
+    try:
+        validate_model_key(effective_model)
+    except MissingAPIKeyError as e:
+        console.error(str(e))
+        sys.exit(1)
+
     convert_directory(directory, output, config, force, progress, model, cooldown=5.0)
 
 @cli.command()
@@ -238,6 +255,94 @@ def rebuild_meta(config, dry_run):
         from .converter import rebuild_metadata_directory
         rebuild_metadata_directory(in_path, out_path, cfg, dry_run=dry_run)
 
+
+# ── config / keys ────────────────────────────────────────────────
+
+@cli.group(name="config", help="Manage SuperMD configuration")
+def config_group():
+    pass
+
+
+@config_group.group(name="keys", help="Manage LLM API keys")
+def keys_group():
+    pass
+
+
+@keys_group.command(name="set")
+@click.argument("name")
+@click.option("--value", prompt="API key", hide_input=True, help="API key value (prompted if omitted)")
+def keys_set(name, value):
+    """Store an API key in the llm keystore.
+
+    NAME is the key identifier (e.g. openai, gemini).
+    In Docker or CI, prefer setting the corresponding environment variable instead.
+    """
+    import llm as _llm
+
+    keys_path = _llm.user_dir() / "keys.json"
+    import json
+
+    keys = {}
+    if keys_path.exists():
+        keys = json.loads(keys_path.read_text())
+    keys[name] = value
+    keys_path.parent.mkdir(parents=True, exist_ok=True)
+    keys_path.write_text(json.dumps(keys, indent=2) + "\n")
+    console.info(f"Key '{name}' saved to {keys_path}")
+
+
+@keys_group.command(name="list")
+def keys_list():
+    """Show which API keys are configured (keystore and environment)."""
+    import llm as _llm
+    import json
+
+    keys_path = _llm.user_dir() / "keys.json"
+    stored = {}
+    if keys_path.exists():
+        stored = json.loads(keys_path.read_text())
+    # Filter out comment entries
+    stored = {k: v for k, v in stored.items() if not k.startswith("//")}
+
+    if stored:
+        click.echo("Keys in llm keystore:")
+        for name in sorted(stored):
+            click.echo(f"  {name}: ****{stored[name][-4:]}")
+    else:
+        click.echo("No keys in llm keystore.")
+
+    # Check common env vars
+    env_keys = [
+        ("OPENAI_API_KEY", "openai"),
+        ("ANTHROPIC_API_KEY", "anthropic"),
+        ("GOOGLE_API_KEY", "gemini"),
+        ("GEMINI_API_KEY", "gemini"),
+    ]
+    found_env = []
+    for var, provider in env_keys:
+        val = os.environ.get(var)
+        if val:
+            found_env.append((var, provider, f"****{val[-4:]}"))
+
+    if found_env:
+        click.echo("\nKeys from environment:")
+        for var, provider, masked in found_env:
+            click.echo(f"  {var} ({provider}): {masked}")
+    elif not stored:
+        click.echo("\nNo API keys found. Set one with:")
+        click.echo("  supermd config keys set <name>")
+        click.echo("  or set an environment variable (e.g. OPENAI_API_KEY)")
+
+
+@keys_group.command(name="path")
+def keys_path():
+    """Show the path to the llm keys file."""
+    import llm as _llm
+
+    click.echo(_llm.user_dir() / "keys.json")
+
+
+# ── service ──────────────────────────────────────────────────────
 
 from .service import install_service, uninstall_service, status_service, start_service, stop_service, logs_service
 

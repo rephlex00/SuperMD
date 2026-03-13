@@ -21,6 +21,7 @@ from supermd.metadata_db import (
     OutputChangedError
 )
 from supermd.context import create_basic_context, create_context
+from supermd.date_utils import expand_date_tokens
 from supermd.console import console
 
 
@@ -106,6 +107,11 @@ def generate_output(
     metadata_manager: MetadataManager,
     input_hash: str,
 ) -> None:
+    ctime = context.get("ctime")
+
+    def preprocess(s: str) -> str:
+        return expand_date_tokens(s, ctime) if ctime else s
+
     jinja_markdown = template.render(context)
 
     for image in context.get("images", []):
@@ -117,10 +123,10 @@ def generate_output(
             if needle in jinja_markdown and replacement not in jinja_markdown:
                 jinja_markdown = jinja_markdown.replace(needle, replacement)
 
-    output_filename_template = Template(config.output_filename_template)
+    output_filename_template = Template(preprocess(config.output_filename_template))
     output_filename = output_filename_template.render(context)
 
-    output_path_template = Template(config.output_path_template)
+    output_path_template = Template(preprocess(config.output_path_template))
     output_path = output_path_template.render(context)
     output_path = os.path.join(output, output_path)
     os.makedirs(output_path, exist_ok=True)
@@ -154,7 +160,7 @@ def generate_output(
     # Update metadata
     output_hash = compute_file_hash(output_path_and_file)
     
-    output_path_template_original = Template(config.output_path_template)
+    output_path_template_original = Template(preprocess(config.output_path_template))
     rel_path_dir = output_path_template_original.render(context)
     expected_rel_path = os.path.join(rel_path_dir, output_filename)
 
@@ -276,9 +282,11 @@ def convert_file(
              console.debug(f"Image cleanup skipped: {e}")
 
         model = model if model else config.model
-        template = Template(config.template)
         file_basename = os.path.splitext(os.path.basename(file_name))[0]
         basic_context = create_basic_context(file_basename, file_name)
+        ctime = basic_context.get("ctime")
+        template_str = expand_date_tokens(config.template, ctime) if ctime else config.template
+        template = Template(template_str)
 
         with generate_images(image_extractor, file_name, output) as pngs:
             template_output = process_pages(

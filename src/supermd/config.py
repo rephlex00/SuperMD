@@ -28,7 +28,7 @@ Convert the following image to text.
 
 DEFAULT_TEMPLATE = """\
 ---
-created: {{year_month_day}}
+created: {{DATE:YYYY-MM-DD}}
 tags: supernote
 ---
 

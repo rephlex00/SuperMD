@@ -4,6 +4,41 @@ from PIL.Image import Image
 import llm
 
 
+class MissingAPIKeyError(Exception):
+    """Raised when the configured LLM model requires an API key that isn't set."""
+
+    def __init__(self, model_id: str, key_name: str, env_var: str | None):
+        self.model_id = model_id
+        self.key_name = key_name
+        self.env_var = env_var
+        lines = [
+            f"No API key configured for model '{model_id}' (key: '{key_name}').",
+        ]
+        if env_var:
+            lines.append(f"Set the {env_var} environment variable, or run:")
+        else:
+            lines.append("Run:")
+        lines.append(f"  supermd config keys set {key_name}")
+        super().__init__("\n".join(lines))
+
+
+def validate_model_key(model: str) -> None:
+    """Check that the given model has a usable API key.
+
+    Raises MissingAPIKeyError if a key is required but not found.
+    """
+    llm_model = llm.get_model(model)
+    if not llm_model.needs_key:
+        return
+    # get_key() checks env vars and the llm keystore
+    if llm_model.get_key() is None:
+        raise MissingAPIKeyError(
+            model_id=model,
+            key_name=llm_model.needs_key,
+            env_var=getattr(llm_model, "key_env_var", None),
+        )
+
+
 def convert_image(text: str, attachment: llm.Attachment, model: str) -> str:
     llm_model = llm.get_model(model)
     response = llm_model.prompt(text, attachments=[attachment])

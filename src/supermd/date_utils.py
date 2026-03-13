@@ -1,6 +1,13 @@
 import re
 from datetime import datetime
 
+
+def expand_date_tokens(template_str: str, date_obj: datetime) -> str:
+    """Replace {{DATE:<format>}} tokens with formatted date values."""
+    def repl(match):
+        return format_date(date_obj, match.group(1))
+    return re.sub(r"\{\{DATE:(.+?)\}\}", repl, template_str)
+
 def format_date(date_obj: datetime, format_str: str) -> str:
     """
     Format a datetime object using Obsidian-style tokens.
