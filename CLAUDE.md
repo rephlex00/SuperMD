@@ -13,6 +13,12 @@ SuperMD converts Supernote handwritten notes (`.note`, `.spd`, PDF, PNG) into Ma
 uv sync
 uv sync --extra test   # include test deps
 
+# LLM setup (one-time, per provider)
+llm install llm-gemini         # for Gemini models
+llm install llm-claude-3       # for Claude models
+llm keys set openai            # or set OPENAI_API_KEY env var
+supermd config keys set <key>  # alternative: set via supermd CLI
+
 # Run tests
 pytest
 pytest tests/test_core.py -v         # single file
@@ -55,10 +61,12 @@ The pipeline flows: CLI → Batches/Watcher → Converter → [Extractor + AI + 
 
 **`config/supermd.yaml`** — Unified config (not committed; use `supermd.example.yaml` as template). Contains `model`, `prompt`, `template`, `output_path_template`, `output_filename_template`, processing `defaults`, and `jobs` list with per-job `input`/`output` paths and optional overrides.
 
-**Environment:** `OPENAI_API_KEY` (or equivalent for the configured LLM provider). The `llm` library is used as the LLM abstraction layer — models are specified in the config using the `llm` plugin naming convention (e.g., `gemini/gemini-2.5-flash`, `gpt-4o-mini`). API keys are managed by `llm` (via `llm keys set` or environment variables).
+**Environment:** API keys are managed by the `llm` library — run `llm keys set <provider>` (e.g., `llm keys set openai`, `llm keys set gemini`) or set the provider's env var (e.g., `OPENAI_API_KEY`, `GEMINI_API_KEY`). Models require the matching `llm` plugin installed first (see Commands above). SuperMD will print a `supermd config keys set` hint if a key is missing at runtime.
 
 ## Key Patterns
 
+- **Title derivation**: If `note_title_prompt` is set in config, a second LLM call generates a short title after transcription; result is available as `{{title}}` in templates.
+- **DATE tokens**: Output path and filename templates support `{{DATE:<format>}}` tokens (e.g., `{{DATE:YYYY/MM MMM}}`). `date_utils.py` handles expansion; format tokens follow Obsidian conventions (YYYY, MM, MMM, DD, dddd, etc.).
 - **Skip protection**: `converter.py` raises a custom exception to skip files; callers catch it to log and continue.
 - **Cooldown**: A configurable delay between page LLM calls prevents rate limiting.
 - **Output path templating**: Both directory and filename are Jinja2 templates evaluated with the context dict (year, month, file_basename, dailynote, etc.).
