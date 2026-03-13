@@ -9,22 +9,19 @@ from contextlib import contextmanager
 from datetime import datetime
 from jinja2 import Template
 from tqdm import tqdm
-import click
 
-from sn2md.types import Config, ImageExtractor
-from sn2md.importers.note import NotebookExtractor
-from sn2md.importers.pdf import PDFExtractor
-from sn2md.importers.png import PNGExtractor
-from sn2md.importers.atelier import AtelierExtractor
-from sn2md.ai_utils import image_to_markdown
-from sn2md.utils import shorten_path, compute_file_hash
-from sn2md.metadata_db import (
+from supermd.types import ImageExtractor
+from supermd.config import SuperMDConfig
+from supermd.importers import get_extractor, SUPPORTED_EXTENSIONS
+from supermd.ai_utils import image_to_markdown
+from supermd.utils import shorten_path, compute_file_hash
+from supermd.metadata_db import (
     MetadataManager,
     InputNotChangedError,
     OutputChangedError
 )
-from sn2md.context import create_basic_context, create_context
-from sn2md.console import console
+from supermd.context import create_basic_context, create_context
+from supermd.console import console
 
 
 @contextmanager
@@ -44,7 +41,7 @@ def generate_images(
 
 def process_pages(
     pngs: list[str],
-    config: Config,
+    config: SuperMDConfig,
     model: str,
     progress_bar: tqdm | None = None,
     prompt_context: dict | None = None,
@@ -84,7 +81,6 @@ def process_pages(
                 + image_to_markdown(
                     page,
                     context,
-                    config.api_key,
                     model,
                     config.prompt,
                     prompt_context,
@@ -102,7 +98,7 @@ def process_pages(
 
 def generate_output(
     pngs: list[str],
-    config: Config,
+    config: SuperMDConfig,
     context: dict,
     file_name: str,
     output: str,
@@ -228,7 +224,7 @@ def convert_file(
     image_extractor: ImageExtractor,
     file_name: str,
     output: str,
-    config: Config,
+    config: SuperMDConfig,
     force: bool = False,
     progress_bar: tqdm | None = None,
     model: str | None = None,
@@ -276,8 +272,8 @@ def convert_file(
                                  os.remove(img_path)
                  except Exception as e:
                      console.warning(f"Failed to cleanup old images: {e}")
-        except Exception:
-             pass
+        except Exception as e:
+             console.debug(f"Image cleanup skipped: {e}")
 
         model = model if model else config.model
         template = Template(config.template)
@@ -324,7 +320,7 @@ def convert_file(
 def convert_directory(
     directory: str,
     output: str,
-    config: Config,
+    config: SuperMDConfig,
     force: bool = False,
     progress: bool = False,
     model: str | None = None,
@@ -339,8 +335,8 @@ def convert_directory(
             
             # Filter relevant files first to know count
             relevant_files = [
-                f for f in files 
-                if f.lower().endswith((".note", ".pdf", ".png", ".spd"))
+                f for f in files
+                if f.lower().endswith(SUPPORTED_EXTENSIONS)
             ]
             
             if not relevant_files:
@@ -357,18 +353,9 @@ def convert_directory(
                 filename = os.path.join(root, file)
                 console.debug(f"Scanning file: {shorten_path(filename)}")
                 
-                # Check extension again (redundant but safe if logic changes)
                 try:
-                    extractor = None
-                    if file.lower().endswith(".note"):
-                        extractor = NotebookExtractor()
-                    elif file.lower().endswith(".pdf"):
-                        extractor = PDFExtractor()
-                    elif file.lower().endswith(".png"):
-                        extractor = PNGExtractor()
-                    elif file.lower().endswith(".spd"):
-                        extractor = AtelierExtractor()
-                    
+                    extractor = get_extractor(file)
+
                     if extractor:
                         convert_file(
                             extractor,
@@ -400,7 +387,7 @@ def convert_directory(
 
 def rebuild_metadata_for_file(
     file_name: str, 
-    config: Config, 
+    config: SuperMDConfig, 
     output_dir: str, 
     metadata_manager: MetadataManager,
     dry_run: bool = False
@@ -456,7 +443,7 @@ def rebuild_metadata_for_file(
 def rebuild_metadata_directory(
     directory: str,
     output: str,
-    config: Config,
+    config: SuperMDConfig,
     dry_run: bool = False
 ) -> None:
     metadata_manager = MetadataManager(output)
@@ -465,7 +452,7 @@ def rebuild_metadata_directory(
             file_list = tqdm(files, desc="Rebuilding Metadata", unit="file")
             for file in file_list:
                  filename = os.path.join(root, file)
-                 if file.lower().endswith(('.note', '.pdf', '.png', '.spd')):
+                 if file.lower().endswith(SUPPORTED_EXTENSIONS):
                      rebuild_metadata_for_file(filename, config, output, metadata_manager, dry_run=dry_run)
     finally:
         metadata_manager.close()

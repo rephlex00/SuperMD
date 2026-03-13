@@ -1,50 +1,70 @@
 from pathlib import Path
 import pytest
-from sn2md.job_config import load_jobs_config, merge_defaults, JobConfig, BatchConfig
+from supermd.config import load_config, SuperMDConfig, JobDefinition
 
-def test_load_valid_config(mock_config_file):
+
+@pytest.fixture
+def unified_config_file(tmp_path):
+    """Creates a temporary supermd.yaml."""
+    config_path = tmp_path / "supermd.yaml"
+    content = """
+model: gpt-4o-mini
+
+defaults:
+  force: false
+  level: INFO
+  cooldown: 5.0
+
+jobs:
+  - name: TestJob
+    input: ~/test_in
+    output: ~/test_out
+  - name: OverrideJob
+    input: ~/custom_in
+    output: ~/custom_out
+    model: gemini/flash
+    force: true
+"""
+    config_path.write_text(content, encoding="utf-8")
+    return config_path
+
+
+def test_load_valid_config(unified_config_file):
     """Verify that a valid YAML config is loaded correctly."""
-    config = load_jobs_config(mock_config_file)
-    assert isinstance(config, BatchConfig)
-    assert config.defaults["input"] == "~/in"
-    assert len(config.jobs) == 1
-    assert config.jobs[0]["name"] == "TestJob"
+    config = load_config(unified_config_file)
+    assert isinstance(config, SuperMDConfig)
+    assert config.model == "gpt-4o-mini"
+    assert len(config.jobs) == 2
+    assert config.jobs[0].name == "TestJob"
+
 
 def test_load_missing_file():
     """Verify error on missing config file."""
     with pytest.raises(FileNotFoundError):
-        load_jobs_config("non_existent.yaml")
+        load_config("non_existent.yaml")
 
-def test_merge_defaults():
-    """Verify that job config overrides defaults correctly."""
-    defaults = {
-        "input": "~/default_in",
-        "output": "~/default_out",
-        "flags": {"force": False, "level": "INFO"}
-    }
-    
-    # job overrides input and one flag
-    job_data = {
-        "name": "OverrideJob",
-        "input": "~/custom_in",
-        "flags": {"force": True}
-    }
-    
-    merged = merge_defaults(job_data, defaults)
-    assert isinstance(merged, JobConfig)
-    
-    # Check overridden
-    assert merged.input == "~/custom_in"
-    assert merged.flags.force is True
-    
-    # Check inherited
-    assert merged.output == "~/default_out"
-    assert merged.flags.level == "INFO"
 
-def test_merge_extra_args():
-    """Verify extra_args are concatenated."""
-    defaults = {"input": "foo", "output": "bar", "extra_args": ["--foo"]}
-    job = {"input": "baz", "extra_args": ["--bar"]}
-    
-    merged = merge_defaults(job, defaults)
-    assert merged.extra_args == ["--foo", "--bar"]
+def test_resolve_job_inherits_defaults(unified_config_file):
+    """Verify that resolve_job merges job overrides with config defaults."""
+    config = load_config(unified_config_file)
+
+    # First job — inherits everything
+    resolved = config.resolve_job(config.jobs[0])
+    assert resolved["model"] == "gpt-4o-mini"
+    assert resolved["force"] is False
+    assert resolved["cooldown"] == 5.0
+
+    # Second job — overrides model and force
+    resolved2 = config.resolve_job(config.jobs[1])
+    assert resolved2["model"] == "gemini/flash"
+    assert resolved2["force"] is True
+    assert resolved2["cooldown"] == 5.0  # inherited
+
+
+def test_defaults_used_when_empty():
+    """Verify SuperMDConfig has sensible defaults."""
+    config = SuperMDConfig()
+    assert config.model == "gpt-4o-mini"
+    assert config.defaults.force is False
+    assert config.defaults.cooldown == 5.0
+    assert config.jobs == []

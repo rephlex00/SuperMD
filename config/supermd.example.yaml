@@ -1,0 +1,117 @@
+# ===============================
+# SuperMD configuration
+# Tuned for: gpt-4o-mini
+# ===============================
+
+model: gpt-4o-mini
+
+# --------------------------------
+# Note Title Derivation
+# --------------------------------
+
+# Derives a short title from the fully transcribed markdown. {markdown} is substituted.
+# Remove or comment out to skip title derivation (title will be empty in the template).
+note_title_prompt: |
+  Given the following transcribed handwritten note, generate a concise title of 4 to 7 words.
+  Rules:
+  - Output only the title, nothing else.
+  - No quotes, no punctuation at the end.
+  - Use title case.
+  - Capture the main topic or purpose of the note.
+
+  Note:
+  {markdown}
+
+  Title:
+
+# --------------------------------
+# Output: one folder per note
+# --------------------------------
+
+output_filename_template: "{{file_basename}}.md"
+output_path_template: "{{ format_date('YYYY/MM MMM') }}"
+
+# --------------------------------
+# Page → Markdown Conversion
+# --------------------------------
+
+prompt: |
+  <context>
+  {context}
+  </context>
+  Convert the image to markdown:
+  - If there is a simple diagram that the mermaid syntax can achieve, create a mermaid codeblock of it.
+  - If most of the image is a drawing (not written text), add a #drawing tag and describe the drawing in no more than 8 words.
+  - When it is unclear what an image is, don't output anything for it.
+  - Use $$, $ latex math blocks for math equations.
+  - Support Obsidian syntaxes and dataview "field:: value" syntax.
+  - Do not wrap text in codeblocks.
+  - Use at most one blank line at a time; never produce consecutive blank lines.
+  - Preserve the original nesting: match each item's indentation level from the handwritten list.
+  - Use exactly 2 spaces per nesting level (never tabs). All siblings at the same depth must have identical indentation.
+  - Never skip a nesting level — a child must be indented exactly one level (2 spaces) deeper than its parent; going from level 1 directly to level 3 is invalid.
+  - Do not insert blank lines between items in the same list block; blank lines break nesting in Markdown.
+  - Sub-items of a checklist item must also use the checklist marker if they themselves have checkboxes, and must be indented 2 spaces under their parent.
+  - Treat something as a checklist only when you can clearly see a square checkbox (whether empty or checked) immediately before the handwritten text; otherwise keep the item as a regular bullet/dash (e.g., start with '- ' and never add brackets).
+  - Checklist vs bullet examples:
+    - Checklist: ☐ Buy milk → '- [ ] Buy milk'
+    - Bullet: • Grocery ideas → '- Grocery ideas'
+    - Nested child: indented 2 spaces → '  - child item'
+  - When transcribing handwritten checklists, map box states explicitly:
+    - Empty box (no mark) → '- [ ] item text'
+    - Checked/filled box → '- [x] item text'
+  - Append the date/emoji at most once per checklist item; if the handwritten text already includes a date or emoji suffix, leave it unchanged.
+  - If an item already appears in Markdown checkbox form (e.g., '- [ ] Task' or '- [x] Done'), copy it verbatim without modifying the checkbox state or appending extra markers.
+  - Do not mistake hand written bullets (small circles next to a line in a list) for checkboxes.
+  - Only checklists should have additional information appended, a normal list should only be transcribed accurately.
+  - The first line should never be a blank line.
+
+  If the image contains what appears to be a heading:
+  - Determine a reasonable heading level based on visual prominence. (#, ##, ###, ####, #####)
+  - If a line is written entirely in all capital letters and stands alone, treat it as a heading; otherwise transcribe it in title case (first letter of each word capitalized), never in all caps.
+  - Do not skip heading levels within a page (e.g., do not jump from ## directly to ####).
+
+# --------------------------------
+# Jinja Output Template
+# --------------------------------
+
+template: |
+  ---
+  date: {{ format_date('YYYY-MM-DD[T]HHmmss') }}
+  dailynote: "[[{{ format_date('[Moments]/YYYY/MM MMM/YYMMDD dddd') }}]]"
+  title: "{{title}}"
+  type: supernote
+  notefile: {{file_basename}}.note
+  {% if images %}coverimage: attachments/{{images[0].name}}{% endif %}
+  ignoresnlock: false
+  tags: handwritten
+  ---
+  {{llm_output}}
+
+  ## Images
+  {% for image in images %}
+  ![{{ image.name }}]({{image.name}})
+  {%- endfor %}
+
+# --------------------------------
+# Processing defaults
+# --------------------------------
+
+defaults:
+  force: false
+  progress: true
+  level: INFO
+  cooldown: 5.0
+
+# --------------------------------
+# Job definitions
+# --------------------------------
+
+jobs:
+  - name: Personal
+    input: ~/Vault/Supernote/Note/Personal
+    output: ~/Vault/Obsidian/Personal/Supernote
+  - name: Work
+    input: ~/Vault/Supernote/Note/Work
+    output: ~/Vault/Obsidian/Work/Supernote
+    # model: gemini/gemini-2.5-flash  # per-job override

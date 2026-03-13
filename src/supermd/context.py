@@ -2,14 +2,14 @@ import base64
 import os
 import posixpath
 from datetime import datetime
-from sn2md.types import Config
-from sn2md.supernotelib import Notebook
-from sn2md.importers.note import convert_binary_to_image
-from sn2md.ai_utils import image_to_text
+from supermd.config import SuperMDConfig
+from supermd.supernotelib import Notebook
+from supermd.importers.note import convert_binary_to_image
+from supermd.ai_utils import image_to_text
 import re
 
-from sn2md.date_utils import format_date
-from sn2md.ai_utils import markdown_to_title
+from supermd.date_utils import format_date
+from supermd.ai_utils import markdown_to_title
 
 def create_basic_context(file_basename: str, file_name: str) -> dict:
     # Try to parse date from filename (YYYYMMDD_HHMMSS or YYYYMMDD)
@@ -42,7 +42,7 @@ def create_basic_context(file_basename: str, file_name: str) -> dict:
         "format_date": lambda fmt: format_date(created_at, fmt), # Custom helper
     }
 
-def create_notebook_context(notebook: Notebook, config: Config, model: str) -> dict:
+def create_notebook_context(notebook: Notebook, config: SuperMDConfig, model: str) -> dict:
     def get_link_str(type_code: int) -> str:
         if type_code == 0:
             return "page"
@@ -84,7 +84,6 @@ def create_notebook_context(notebook: Notebook, config: Config, model: str) -> d
                 "page_number": title.get_page_number(),
                 "content": image_to_text(
                     convert_binary_to_image(notebook, title),
-                    config.api_key,
                     model,
                     config.title_prompt,
                 ),
@@ -98,7 +97,7 @@ def create_notebook_context(notebook: Notebook, config: Config, model: str) -> d
 def create_context(
     notebook: Notebook | None,
     pngs: list[str],
-    config: Config,
+    config: SuperMDConfig,
     file_name: str,
     model: str,
     template_output: str,
@@ -119,7 +118,7 @@ def create_context(
 
     title = ""
     if config.note_title_prompt and template_output.strip():
-        title = markdown_to_title(template_output, config.api_key, model, config.note_title_prompt)
+        title = markdown_to_title(template_output, model, config.note_title_prompt)
 
     context = {
         "markdown": template_output,

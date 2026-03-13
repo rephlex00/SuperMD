@@ -4,11 +4,11 @@ import os
 import sqlite3
 import sys
 
-import sn2md.supernotelib as sn
+import supermd.supernotelib as sn
 from PIL import Image
 from typing_extensions import override
 
-from sn2md.types import ImageExtractor
+from supermd.types import ImageExtractor
 
 logger = logging.getLogger(__name__)
 

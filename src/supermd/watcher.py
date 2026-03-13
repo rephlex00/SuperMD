@@ -1,12 +1,9 @@
 import os
 import time
-import sys
-import subprocess
-from pathlib import Path
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 from .batches import run_batches
-from sn2md.console import console
+from supermd.console import console
 
 class DebouncedEventHandler(FileSystemEventHandler):
     def __init__(self):
@@ -48,21 +45,18 @@ def run_watcher(config_path: str, parallelism: int = 1, delay: float = 30.0):
     # Setup watchdog
     # Note: We need to know which directories to watch.
     # Parsing config to find input directories
-    from .job_config import load_jobs_config
+    from .config import load_config
     try:
-        batch_config = load_jobs_config(config_path)
+        config = load_config(config_path)
     except Exception as e:
         console.log(f"Error loading config: {e}")
         return
 
     # Collect unique input directories
     watch_dirs = set()
-    defaults = batch_config.defaults
-    for job in batch_config.jobs:
-        # Merge basic defaults
-        input_dir = job.get("input", defaults.get("input"))
-        if input_dir:
-            watch_dirs.add(os.path.expanduser(input_dir))
+    for job in config.jobs:
+        resolved = config.resolve_job(job)
+        watch_dirs.add(resolved["input"])
             
     if not watch_dirs:
         console.log("No input directories found to watch.")

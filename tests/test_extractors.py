@@ -1,14 +1,14 @@
 
 import pytest
 from unittest.mock import MagicMock, patch
-from sn2md.importers.note import NotebookExtractor
-from sn2md.importers.pdf import PDFExtractor
-from sn2md.importers.png import PNGExtractor
+from supermd.importers.note import NotebookExtractor
+from supermd.importers.pdf import PDFExtractor
+from supermd.importers.png import PNGExtractor
 
 # --- NotebookExtractor Tests ---
 
-@patch("sn2md.importers.note.load_notebook")
-@patch("sn2md.importers.note.convert_notebook_to_pngs")
+@patch("supermd.importers.note.load_notebook")
+@patch("supermd.importers.note.convert_notebook_to_pngs")
 def test_notebook_extractor_extract(mock_convert, mock_load):
     """Verify NotebookExtractor loads and converts notebook."""
     extractor = NotebookExtractor()
@@ -20,7 +20,7 @@ def test_notebook_extractor_extract(mock_convert, mock_load):
     mock_convert.assert_called()
     assert result == ["img1.png"]
 
-@patch("sn2md.importers.note.load_notebook")
+@patch("supermd.importers.note.load_notebook")
 def test_notebook_extractor_get_notebook(mock_load):
     """Verify loading notebook object."""
     extractor = NotebookExtractor()

@@ -3,7 +3,7 @@ requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "sn2md-app"
+name = "supermd"
 version = "2.5.0"
 description = "Supernote to Markdown converter and sync tool"
 readme = "README.md"
@@ -23,7 +23,7 @@ dependencies = [
     "click",
     "watchdog",
     # Transitive dependencies for vendored libs
-    "platformdirs", # sn2md
+    "platformdirs", # supermd
     "potracer",     # supernotelib
     "svgwrite",     # supernotelib
     "colour",       # supernotelib
@@ -36,7 +36,7 @@ test = [
 ]
 
 [project.scripts]
-sn2md-cli = "sn2md.cli:cli"
+supermd = "supermd.cli:cli"
 
 [tool.setuptools.packages.find]
 where = ["src"]

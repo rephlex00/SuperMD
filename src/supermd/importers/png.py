@@ -1,7 +1,7 @@
 import os
 import shutil
-from sn2md.supernotelib import Notebook
-from sn2md.types import ImageExtractor
+from supermd.supernotelib import Notebook
+from supermd.types import ImageExtractor
 
 
 class PNGExtractor(ImageExtractor):

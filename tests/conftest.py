@@ -11,25 +11,24 @@ def mock_workspace(tmp_path):
     """
     d = tmp_path / "workspace"
     d.mkdir()
-    
+
     (d / "in").mkdir()
     (d / "out").mkdir()
     (d / "config").mkdir()
-    
+
     return d
 
 @pytest.fixture
 def mock_config_file(mock_workspace):
     """
-    Creates a temporary jobs.yaml in the mock workspace.
+    Creates a temporary supermd.yaml in the mock workspace.
     """
-    config_path = mock_workspace / "jobs.yaml"
+    config_path = mock_workspace / "supermd.yaml"
     content = """
+model: gpt-4o-mini
+
 defaults:
-  input: ~/in
-  output: ~/out
-  flags:
-    force: false
+  force: false
 
 jobs:
   - name: TestJob
