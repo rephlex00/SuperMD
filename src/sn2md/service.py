@@ -31,6 +31,8 @@ PLIST_TEMPLATE = """<?xml version="1.0" encoding="UTF-8"?>
       <string>$PYTHONPATH</string>
       <key>NO_COLOR</key>
       <string>1</string>
+      <key>PYTHONUNBUFFERED</key>
+      <string>1</string>
     </dict>
 
     <key>RunAtLoad</key>

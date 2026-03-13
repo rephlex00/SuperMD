@@ -9,6 +9,7 @@ from sn2md.ai_utils import image_to_text
 import re
 
 from sn2md.date_utils import format_date
+from sn2md.ai_utils import markdown_to_title
 
 def create_basic_context(file_basename: str, file_name: str) -> dict:
     # Try to parse date from filename (YYYYMMDD_HHMMSS or YYYYMMDD)
@@ -116,10 +117,15 @@ def create_context(
             }
         )
 
+    title = ""
+    if config.note_title_prompt and template_output.strip():
+        title = markdown_to_title(template_output, config.api_key, model, config.note_title_prompt)
+
     context = {
         "markdown": template_output,
         "llm_output": template_output,
         "images": images,
+        "title": title,
         **basic_context,
     }
 
