@@ -178,17 +178,24 @@ def test_verify_metadata_file_reprocess_broken(mock_exists):
 @patch("supermd.converter.image_to_markdown", return_value="content")
 @patch("supermd.converter.sleep")
 def test_process_pages_cooldown(mock_sleep, mock_i2m, mock_config):
-    """Test that cooldown sleep is called between pages (not before the first)."""
-    from supermd.converter import process_pages
-    
+    """Test that cooldown sleep is called between API calls (not before the first call ever)."""
+    from supermd.converter import process_pages, CooldownState
+
     pngs = ["1.png", "2.png", "3.png"]
-    process_pages(pngs, mock_config, "model", cooldown=0.1)
-    
+
+    # Fresh state: first call has no prior call, so no sleep before page 1
+    state = CooldownState(0.1)
+    process_pages(pngs, mock_config, "model", cooldown_state=state)
+
     # Should sleep between pages only (2 times for 3 pages)
     assert mock_sleep.call_count == 2
-    mock_sleep.assert_called_with(0.1)
-    
-    # Test with cooldown 0
+
+    # Shared state: simulates processing a second file — first page of next file sleeps
     mock_sleep.reset_mock()
-    process_pages(pngs, mock_config, "model", cooldown=0.0)
+    process_pages(["4.png"], mock_config, "model", cooldown_state=state)
+    assert mock_sleep.call_count == 1
+
+    # No cooldown state: no sleep
+    mock_sleep.reset_mock()
+    process_pages(pngs, mock_config, "model", cooldown_state=None)
     mock_sleep.assert_not_called()

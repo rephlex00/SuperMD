@@ -67,6 +67,7 @@ The pipeline flows: CLI → Batches/Watcher → Converter → [Extractor + AI + 
 
 - **Title derivation**: If `note_title_prompt` is set in config, a second LLM call generates a short title after transcription; result is available as `{{title}}` in templates.
 - **DATE tokens**: Output path and filename templates support `{{DATE:<format>}}` tokens (e.g., `{{DATE:YYYY/MM MMM}}`). `date_utils.py` handles expansion; format tokens follow Obsidian conventions (YYYY, MM, MMM, DD, dddd, etc.).
+- **DATE token preprocessing**: Any code path constructing a Jinja2 `Template` from `config.output_path_template` or `config.output_filename_template` **must** call `expand_date_tokens(s, ctime)` first — Jinja2 will raise `TemplateSyntaxError` on the `:` in `{{DATE:...}}`. Follow the `preprocess()` helper pattern in `converter.py`.
 - **Skip protection**: `converter.py` raises a custom exception to skip files; callers catch it to log and continue.
 - **Cooldown**: A configurable delay between page LLM calls prevents rate limiting.
 - **Output path templating**: Both directory and filename are Jinja2 templates evaluated with the context dict (year, month, file_basename, dailynote, etc.).

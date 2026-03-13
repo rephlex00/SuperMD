@@ -4,7 +4,7 @@ import os
 import posixpath
 import json
 from typing import Generator
-from time import sleep, time
+from time import sleep, monotonic
 from contextlib import contextmanager
 from datetime import datetime
 from jinja2 import Template
@@ -23,6 +23,28 @@ from supermd.metadata_db import (
 from supermd.context import create_basic_context, create_context
 from supermd.date_utils import expand_date_tokens
 from supermd.console import console
+
+
+class CooldownState:
+    """Enforces a minimum delay between consecutive API calls."""
+
+    def __init__(self, cooldown: float):
+        self.cooldown = cooldown
+        self._last_call: float | None = None
+
+    def wait(self, progress_bar=None) -> None:
+        if self.cooldown <= 0 or self._last_call is None:
+            return
+        step = 0.1
+        remaining = self.cooldown - (monotonic() - self._last_call)
+        while remaining > 0:
+            if progress_bar:
+                progress_bar.set_description(f"Cooldown: {remaining:.1f}s")
+            sleep(step)
+            remaining -= step
+
+    def mark(self) -> None:
+        self._last_call = monotonic()
 
 
 @contextmanager
@@ -46,7 +68,7 @@ def process_pages(
     model: str,
     progress_bar: tqdm | None = None,
     prompt_context: dict | None = None,
-    cooldown: float = 0.0,
+    cooldown_state: CooldownState | None = None,
 ) -> str:
     template_output = ""
     total_pages = len(pngs)
@@ -55,21 +77,12 @@ def process_pages(
         # Update progress description
         if progress_bar:
              progress_bar.set_description(f"Processing Page {i+1}/{total_pages}")
-        
-        # Cooldown between pages (skip the first page to avoid unnecessary delay)
-        if cooldown > 0 and i > 0:
-            # Cooldown with visual feedback
-            step = 0.1
-            remaining = cooldown
-            while remaining > 0:
-                if progress_bar:
-                    progress_bar.set_description(f"Cooldown: {remaining:.1f}s (Page {i+1}/{total_pages})")
-                sleep(step)
-                remaining -= step
-            
-            # Restore description after cooldown
+
+        # Enforce cooldown before every API call (skips wait on the very first call ever)
+        if cooldown_state:
+            cooldown_state.wait(progress_bar)
             if progress_bar:
-                 progress_bar.set_description(f"Processing Page {i+1}/{total_pages}")
+                progress_bar.set_description(f"Processing Page {i+1}/{total_pages}")
 
         context = ""
         if i > 0 and len(template_output) > 0:
@@ -87,6 +100,8 @@ def process_pages(
                     prompt_context,
                 )
             )
+            if cooldown_state:
+                cooldown_state.mark()
         except KeyError as e:
             console.error(f"Template rendering failed. Missing key: {e}")
             if prompt_context:
@@ -237,6 +252,7 @@ def convert_file(
     dry_run: bool = False,
     metadata_manager: MetadataManager | None = None,
     cooldown: float = 0.0,
+    _cooldown_state: CooldownState | None = None,
 ) -> None:
     console.debug(f"convert_file: {shorten_path(file_name)}")
     
@@ -288,6 +304,8 @@ def convert_file(
         template_str = expand_date_tokens(config.template, ctime) if ctime else config.template
         template = Template(template_str)
 
+        cooldown_state = _cooldown_state or (CooldownState(cooldown) if cooldown > 0 else None)
+
         with generate_images(image_extractor, file_name, output) as pngs:
             template_output = process_pages(
                 pngs,
@@ -295,7 +313,7 @@ def convert_file(
                 model,
                 progress_bar,
                 basic_context,
-                cooldown=cooldown,
+                cooldown_state=cooldown_state,
             )
 
             notebook = image_extractor.get_notebook(file_name)
@@ -307,6 +325,7 @@ def convert_file(
                 model,
                 template_output,
                 basic_context,
+                cooldown_state=cooldown_state,
             )
 
             generate_output(
@@ -336,6 +355,7 @@ def convert_directory(
     cooldown: float = 0.0,
 ) -> None:
     metadata_manager = MetadataManager(output)
+    cooldown_state = CooldownState(cooldown) if cooldown > 0 else None
     try:
         for root, _, files in os.walk(directory):
             # Sort files for consistent order
@@ -375,7 +395,7 @@ def convert_directory(
                             model=model,
                             dry_run=dry_run,
                             metadata_manager=metadata_manager,
-                            cooldown=cooldown
+                            _cooldown_state=cooldown_state,
                         )
                 except InputNotChangedError:
                     if dry_run:
@@ -406,12 +426,16 @@ def rebuild_metadata_for_file(
     basic_context = create_basic_context(file_basename, file_name)
     
     # Calculate where the output should be
-    output_path_template = Template(config.output_path_template)
+    ctime = basic_context.get("ctime")
+    def preprocess(s: str) -> str:
+        return expand_date_tokens(s, ctime) if ctime else s
+
+    output_path_template = Template(preprocess(config.output_path_template))
     rel_output_path = output_path_template.render(basic_context)
     full_output_dir = os.path.join(output_dir, rel_output_path)
-    
+
     # Calculate filename
-    output_filename_template = Template(config.output_filename_template)
+    output_filename_template = Template(preprocess(config.output_filename_template))
     try:
         output_filename = output_filename_template.render({**basic_context, "images": []})
     except Exception:

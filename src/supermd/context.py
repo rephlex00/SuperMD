@@ -96,6 +96,7 @@ def create_context(
     model: str,
     template_output: str,
     basic_context: dict,
+    cooldown_state=None,
 ) -> dict:
     images = []
     for png_path in pngs:
@@ -112,7 +113,11 @@ def create_context(
 
     title = ""
     if config.note_title_prompt and template_output.strip():
+        if cooldown_state:
+            cooldown_state.wait()
         title = markdown_to_title(template_output, model, config.note_title_prompt)
+        if cooldown_state:
+            cooldown_state.mark()
 
     context = {
         "markdown": template_output,
