@@ -2,7 +2,6 @@ import os
 import sys
 
 import click
-from platformdirs import user_config_dir
 from tqdm import tqdm
 
 from supermd import __version__
@@ -33,7 +32,7 @@ def get_config(config_file: str) -> SuperMDConfig:
     "--config",
     "-c",
     type=click.Path(dir_okay=False),
-    default=user_config_dir() + "/supermd.yaml",
+    default="config/supermd.yaml",
     help="Path to a supermd configuration",
 )
 @click.option(
