@@ -1,16 +1,45 @@
-# ===============================
-# SuperMD configuration
-# Tuned for: gpt-4o-mini
-# ===============================
+# =============================================================================
+# SuperMD Example Configuration
+# =============================================================================
+# Copy this file to supermd.yaml and edit to suit your setup.
+# Usage: supermd run --config config/supermd.yaml
+#        supermd watch --config config/supermd.yaml
+#
+# API keys are NOT stored here. Manage them with the llm library:
+#   llm keys set openai        # for OpenAI models
+#   llm keys set gemini        # for Google Gemini models
+# Or set environment variables (e.g. OPENAI_API_KEY, GEMINI_API_KEY).
+# =============================================================================
+
+
+# -----------------------------------------------------------------------------
+# LLM Model
+# -----------------------------------------------------------------------------
+# The model used to transcribe pages. Uses the `llm` plugin naming convention.
+# Install plugins as needed: `llm install llm-gemini`, `llm install llm-claude-3`
+#
+# Examples:
+#   gpt-4o-mini                  (OpenAI — default, fast & cheap)
+#   gpt-4o                       (OpenAI — higher quality)
+#   gemini/gemini-2.5-flash      (Google Gemini — requires llm-gemini plugin)
+#   claude-sonnet-4-6            (Anthropic Claude — requires llm-claude-3 plugin)
+#
+# Can be overridden per-job in the `jobs` section.
 
 model: gpt-4o-mini
 
-# --------------------------------
-# Note Title Derivation
-# --------------------------------
 
-# Derives a short title from the fully transcribed markdown. {markdown} is substituted.
-# Remove or comment out to skip title derivation (title will be empty in the template).
+# -----------------------------------------------------------------------------
+# Note Title Derivation  (optional)
+# -----------------------------------------------------------------------------
+# If present, SuperMD runs a second LLM call after transcription to generate
+# a short human-readable title for the note.
+# The {markdown} placeholder is replaced with the fully transcribed text.
+# The result is available as {{title}} in `template`.
+#
+# Remove or comment out this entire key to skip title derivation
+# ({{title}} will be an empty string in the template).
+
 note_title_prompt: |
   Given the following transcribed handwritten note, generate a concise title of 4 to 7 words.
   Rules:
@@ -24,16 +53,63 @@ note_title_prompt: |
 
   Title:
 
-# --------------------------------
-# Output: one folder per note
-# --------------------------------
+
+# -----------------------------------------------------------------------------
+# Output Path Templates
+# -----------------------------------------------------------------------------
+# Jinja2 templates that determine where output files are written.
+# Paths are relative to each job's `output` directory.
+#
+# --- Available variables ---
+#   file_basename   Filename without extension (e.g. "20260313_143000")
+#   file_name       Full absolute path to the input file
+#   ctime           datetime — parsed from filename (YYYYMMDD_HHMMSS / YYYYMMDD)
+#                   or falls back to filesystem mtime
+#   mtime           datetime — filesystem modification time
+#   title           Derived title string (empty if note_title_prompt is not set)
+#   images          List of extracted page images (see `template` section)
+#   links           List of notebook cross-references (.note files only)
+#   keywords        List of notebook keywords (.note files only)
+#   titles          List of notebook heading metadata (.note files only)
+#
+# --- DATE token expansion ---
+# Use {{DATE:format}} anywhere in either template. The format string supports:
+#   YYYY    4-digit year           (e.g. 2026)
+#   YY      2-digit year           (e.g. 26)
+#   MM      2-digit month          (e.g. 03)
+#   MMM     3-letter month abbrev  (e.g. Mar)
+#   MMMM    Full month name        (e.g. March)
+#   DD      2-digit day            (e.g. 13)
+#   D       Day without padding    (e.g. 13)
+#   HH      2-digit hour, 24h      (e.g. 14)
+#   mm      2-digit minute         (e.g. 30)
+#   ss      2-digit second         (e.g. 45)
+#   dddd    Full day name          (e.g. Thursday)
+#   ddd     3-letter day abbrev    (e.g. Thu)
+#   [text]  Literal text           (e.g. [T] → T, [Moments] → Moments)
+#
+# The date is sourced from the file's ctime (see above).
+#
+# --- Examples ---
+#   output_path_template: "{{DATE:YYYY/MM MMM}}"
+#     → 2026/03 Mar/
+#
+#   output_path_template: "{{DATE:YYYY}}/{{file_basename}}"
+#     → 2026/20260313_143000/
+#
+#   output_filename_template: "{{DATE:YYMMDD}}-{{file_basename}}.md"
+#     → 260313-20260313_143000.md
 
 output_filename_template: "{{file_basename}}.md"
 output_path_template: "{{DATE:YYYY/MM MMM}}"
 
-# --------------------------------
-# Page → Markdown Conversion
-# --------------------------------
+
+# -----------------------------------------------------------------------------
+# Page → Markdown Transcription Prompt
+# -----------------------------------------------------------------------------
+# Sent to the LLM for each page image. The {context} placeholder is replaced
+# with the markdown output from the previous page, giving the model continuity.
+# Use {context} in your prompt wherever prior-page context should appear.
 
 prompt: |
   <context>
@@ -71,9 +147,32 @@ prompt: |
   - If a line is written entirely in all capital letters and stands alone, treat it as a heading; otherwise transcribe it in title case (first letter of each word capitalized), never in all caps.
   - Do not skip heading levels within a page (e.g., do not jump from ## directly to ####).
 
-# --------------------------------
-# Jinja Output Template
-# --------------------------------
+
+# -----------------------------------------------------------------------------
+# Output File Template  (Jinja2)
+# -----------------------------------------------------------------------------
+# Rendered once per input file to produce the final .md output.
+# Supports all context variables listed under Output Path Templates above,
+# plus these additional variables only available at render time:
+#
+#   llm_output      Full transcribed markdown from all pages combined
+#   images          List of extracted page image objects, each with:
+#                     .name      filename  (e.g. "page_001.png")
+#                     .rel_path  path relative to output dir
+#                     .link      Obsidian-style wikilink
+#                     .abs_path  absolute path on disk
+#
+# Notebook-only variables (populated for .note files; empty lists otherwise):
+#   links           List of cross-references, each with:
+#                     .page_number  .type ("page"/"file"/"web")  .name  .inout ("in"/"out")
+#   keywords        List of keywords, each with: .page_number  .content
+#   titles          List of headings, each with: .page_number  .content  .level
+#
+# The `ignoresnlock` frontmatter field controls overwrite protection:
+#   false  (default) — file can be re-transcribed if the source changes
+#   true             — file is permanently protected; SuperMD will never overwrite it
+#
+# DATE token expansion (see Output Path Templates above) is also supported here.
 
 template: |
   ---
@@ -93,25 +192,70 @@ template: |
   ![{{ image.name }}]({{image.name}})
   {%- endfor %}
 
-# --------------------------------
-# Processing defaults
-# --------------------------------
+
+# -----------------------------------------------------------------------------
+# Processing Defaults
+# -----------------------------------------------------------------------------
+# These values apply to all jobs unless overridden at the job level.
 
 defaults:
+  # force (bool, default: false)
+  # Reprocess files even if the input is unchanged or the output has been
+  # hand-edited. Normally SuperMD skips files whose source hash matches the
+  # stored hash, and refuses to overwrite manually-edited outputs.
+  # Set to true to bypass both checks (useful for re-running after prompt changes).
   force: false
+
+  # progress (bool, default: true)
+  # Show a tqdm progress bar during directory processing.
+  # Automatically disabled when running jobs in parallel (parallelism > 1).
   progress: true
+
+  # level (string, default: INFO)
+  # Logging verbosity. Options: DEBUG | INFO | WARNING | ERROR
   level: INFO
+
+  # cooldown (float, seconds, default: 5.0)
+  # Delay between LLM calls for successive pages within a single file.
+  # Helps avoid rate-limit errors. Set to 0 to disable.
   cooldown: 5.0
 
-# --------------------------------
-# Job definitions
-# --------------------------------
+
+# -----------------------------------------------------------------------------
+# Job Definitions
+# -----------------------------------------------------------------------------
+# Each job defines an input directory to scan and an output directory to write
+# transcribed markdown files into. Run all jobs with `supermd run` or watch
+# them continuously with `supermd watch`.
+#
+# Required fields per job:
+#   name    Human-readable label shown in logs
+#   input   Source directory (supports ~ and $ENV_VAR expansion)
+#   output  Destination directory (supports ~ and $ENV_VAR expansion)
+#
+# Optional per-job overrides (inherit from `defaults` when omitted):
+#   model     Override the LLM model for this job only
+#   force     Override force-reprocess for this job only
+#   progress  Override progress bar display for this job only
+#   level     Override logging level for this job only
+#   cooldown  Override page cooldown for this job only
+#
+# Skip & lock behaviour:
+#   - A file is skipped if its input SHA-1 hash matches the stored hash
+#     (set force: true to override).
+#   - A file is skipped if the output was hand-edited after transcription
+#     (detected via output hash mismatch) unless force: true.
+#   - A file with `ignoresnlock: true` in its frontmatter is ALWAYS skipped,
+#     even with force: true — it is permanently protected.
 
 jobs:
   - name: Personal
     input: ~/Vault/Supernote/Note/Personal
     output: ~/Vault/Obsidian/Personal/Supernote
+
   - name: Work
     input: ~/Vault/Supernote/Note/Work
     output: ~/Vault/Obsidian/Work/Supernote
-    # model: gemini/gemini-2.5-flash  # per-job override
+    # model: gemini/gemini-2.5-flash  # use a different model for this job
+    # cooldown: 2.0                   # faster pacing for a higher-tier API plan
+    # force: true                     # always re-transcribe regardless of hash
