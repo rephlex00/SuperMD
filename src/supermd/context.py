@@ -8,7 +8,6 @@ from supermd.importers.note import convert_binary_to_image
 from supermd.ai_utils import image_to_text
 import re
 
-from supermd.date_utils import format_date
 from supermd.ai_utils import markdown_to_title
 
 def create_basic_context(file_basename: str, file_name: str) -> dict:
@@ -35,11 +34,6 @@ def create_basic_context(file_basename: str, file_name: str) -> dict:
         "file_name": file_name,
         "ctime": created_at,
         "mtime": datetime.fromtimestamp(os.path.getmtime(file_name)),
-        "year_month_day": created_at.strftime("%Y-%m-%d"),
-        "year": created_at.strftime("%Y"),
-        "month": created_at.strftime("%b"),
-        "day": created_at.strftime("%d"),
-        "format_date": lambda fmt: format_date(created_at, fmt), # Custom helper
     }
 
 def create_notebook_context(notebook: Notebook, config: SuperMDConfig, model: str) -> dict:

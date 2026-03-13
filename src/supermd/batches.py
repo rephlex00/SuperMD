@@ -4,6 +4,7 @@ import concurrent.futures
 
 from supermd.converter import convert_directory
 from supermd.config import SuperMDConfig, JobDefinition, load_config
+from supermd.ai_utils import MissingAPIKeyError, validate_model_key
 from supermd.console import console
 
 
@@ -78,6 +79,18 @@ def run_batches(config_path: str, parallelism: int = 1, dry_run: bool = False, d
         console.log(f"      Input: {resolved['input']}")
         console.log(f"      Output: {resolved['output']}")
         console.log(f"      Process: force={resolved['force']} model={resolved['model']} cooldown={resolved['cooldown']}s")
+
+    # Validate API keys for all models before starting any jobs
+    models_seen = set()
+    for job in jobs:
+        resolved = config.resolve_job(job)
+        models_seen.add(resolved["model"])
+    for model_name in models_seen:
+        try:
+            validate_model_key(model_name)
+        except MissingAPIKeyError as e:
+            console.log(str(e))
+            sys.exit(1)
 
     # Disable progress bars if running in parallel to avoid output corruption
     disable_progress = parallelism > 1
