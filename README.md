@@ -30,7 +30,7 @@ Convert [Supernote](https://supernote.com/) `.note` files (and PDFs, PNGs, and A
 ### 1. Clone & install
 
 ```bash
-git clone https://github.com/your-org/supermd.git
+git clone https://github.com/rephlex00/SuperMD.git
 cd supermd
 
 # Create venv and install (uv)
@@ -57,14 +57,28 @@ Key fields in `supermd.yaml`:
 | `model` | LLM model name (default: `gpt-4o-mini`) |
 | `prompt` | System prompt for page-to-Markdown conversion |
 | `template` | Jinja2 template for the final `.md` output |
-| `output_path_template` | Directory structure template (e.g. `{{ format_date('YYYY/MM MMM') }}`) |
+| `output_path_template` | Directory structure template (e.g. `{{DATE:YYYY/MM MMM}}`) |
 | `output_filename_template` | Output filename template (e.g. `{{file_basename}}.md`) |
+| `note_title_prompt` | Optional second LLM call to derive a short title for the note |
 | `jobs` | List of input/output folder pairs for batch processing |
 
 ### 3. Set your API key
 
 ```bash
+# Option A: store in the llm keystore
+llm keys set openai
+# or via the supermd CLI
+supermd config keys set openai
+
+# Option B: environment variable
 export OPENAI_API_KEY="sk-..."
+```
+
+Install the matching `llm` plugin if you use a non-OpenAI model:
+
+```bash
+llm install llm-gemini    # Google Gemini
+llm install llm-claude-3  # Anthropic Claude
 ```
 
 ### 4. Run
@@ -91,49 +105,79 @@ supermd watch --config config/supermd.yaml
 Usage: supermd [OPTIONS] COMMAND [ARGS]...
 
 Options:
-  -c, --config PATH       Path to supermd.yaml config
-  -o, --output PATH       Output directory (default: supernote)
-  -f, --force             Force reprocessing of unchanged files
+  -c, --config PATH         Path to supermd.yaml config (default: config/supermd.yaml)
+  -o, --output PATH         Output directory (default: supernote)
+  -f, --force               Force reprocessing of unchanged files
   --progress/--no-progress  Show progress bar (default: on)
-  -l, --level TEXT        Log level: DEBUG, INFO, WARNING, ERROR
-  -m, --model TEXT        LLM model override
-  -v, --version           Show version
+  -l, --level TEXT          Log level: DEBUG, INFO, WARNING, ERROR
+  -m, --model TEXT          LLM model override
+  -v, --version             Show version
 ```
 
 | Command | Description |
 |---|---|
 | `file <path>` | Convert a single file |
 | `directory <path>` | Convert all supported files in a directory |
-| `run` | Run batch jobs from a YAML config |
-| `watch` | Watch input directories and auto-convert on changes |
-| `meta list` | List tracked files and their status |
+| `run` | Run batch jobs from a YAML config (`--config`, `--jobs`, `--dry-run`, `--debug`) |
+| `watch` | Watch input directories and auto-convert on changes (`--config`, `--jobs`, `--delay`) |
+| `meta list` | List tracked files and their status (`--verbose`) |
 | `meta rebuild` | Rebuild metadata from existing input/output pairs |
 | `meta rm` | Remove all metadata (reset tracking) |
+| `config keys set <name>` | Store an API key in the llm keystore |
+| `config keys list` | Show configured API keys (keystore + environment) |
+| `config keys path` | Show the path to the llm keys file |
 | `service install` | Install as a macOS launchd service |
 | `service uninstall` | Remove the launchd service |
-| `service start/stop` | Start or stop the service |
-| `service logs` | View service log output |
+| `service start` | Start the service |
+| `service stop` | Stop the service |
+| `service status` | Check status of the background service |
+| `service logs` | View service log output (`--lines`, `--follow`) |
 
 ---
 
 ## Template Variables
 
-The following variables are available in both `output_path_template`, `output_filename_template`, and the main `template`:
+The following variables are available in `output_path_template`, `output_filename_template`, and the main `template`:
 
 | Variable | Example | Description |
 |---|---|---|
 | `file_basename` | `20250104_080151` | Input filename without extension |
-| `file_name` | `/path/to/file.note` | Full input path |
-| `year_month_day` | `2025-01-04` | Creation date (YYYY-MM-DD) |
-| `year` | `2025` | 4-digit year |
-| `month` | `Jan` | Abbreviated month |
-| `day` | `04` | Zero-padded day |
-| `format_date(fmt)` | `format_date('YYYY-MM-DD')` | Obsidian-style date formatting |
-| `llm_output` | *(markdown text)* | The LLM transcription |
-| `images` | *(list)* | Extracted page images with `.name`, `.link`, `.rel_path` |
-| `links` | *(list)* | Notebook internal links |
-| `keywords` | *(list)* | Notebook keywords |
-| `titles` | *(list)* | Notebook title annotations |
+| `file_name` | `/path/to/file.note` | Full absolute input path |
+| `ctime` | `datetime` | Parsed from filename (`YYYYMMDD_HHMMSS` / `YYYYMMDD`), falls back to filesystem mtime |
+| `mtime` | `datetime` | Filesystem modification time |
+| `title` | `My Note Title` | LLM-derived title (empty string if `note_title_prompt` is not set) |
+| `llm_output` | *(markdown text)* | The full LLM transcription (main `template` only) |
+| `images` | *(list)* | Extracted page images — each has `.name`, `.link`, `.rel_path`, `.abs_path` |
+| `links` | *(list)* | Notebook cross-references (`.note` only) — each has `.page_number`, `.type`, `.name`, `.inout` |
+| `keywords` | *(list)* | Notebook keywords (`.note` only) — each has `.page_number`, `.content` |
+| `titles` | *(list)* | Notebook heading metadata (`.note` only) — each has `.page_number`, `.content`, `.level` |
+
+### DATE token expansion
+
+Use `{{DATE:format}}` anywhere in path/filename templates and in the main `template`. The date is sourced from the file's `ctime`.
+
+| Token | Example output | Description |
+|---|---|---|
+| `YYYY` | `2026` | 4-digit year |
+| `YY` | `26` | 2-digit year |
+| `MM` | `03` | 2-digit month |
+| `MMM` | `Mar` | 3-letter month abbreviation |
+| `MMMM` | `March` | Full month name |
+| `DD` | `13` | 2-digit day |
+| `D` | `13` | Day without padding |
+| `HH` | `14` | 2-digit hour (24h) |
+| `mm` | `30` | 2-digit minute |
+| `ss` | `45` | 2-digit second |
+| `dddd` | `Thursday` | Full day name |
+| `ddd` | `Thu` | 3-letter day abbreviation |
+| `[text]` | `T` | Literal text passthrough |
+
+Examples:
+
+```yaml
+output_path_template: "{{DATE:YYYY/MM MMM}}"       # → 2026/03 Mar/
+output_filename_template: "{{DATE:YYMMDD}}-{{file_basename}}.md"  # → 260313-20260313_143000.md
+```
 
 ---
 
@@ -150,7 +194,9 @@ pip install -e ".[test]"
 ### Run tests
 
 ```bash
-python -m pytest tests/ -v
+pytest
+pytest tests/test_core.py -v         # single file
+pytest tests/test_core.py::test_name # single test
 ```
 
 ### Project structure
