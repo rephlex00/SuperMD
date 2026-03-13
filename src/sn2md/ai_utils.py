@@ -37,6 +37,14 @@ def _image_to_bytes(image: Image) -> bytes:
     return img_byte_arr.getvalue()
 
 
+def markdown_to_title(markdown: str, api_key: str | None, model: str, prompt: str) -> str:
+    llm_model = llm.get_model(model)
+    if api_key:
+        llm_model.key = api_key
+    response = llm_model.prompt(prompt.format(markdown=markdown))
+    return response.text().strip()
+
+
 def image_to_text(image: Image, api_key: str | None, model: str, prompt: str) -> str:
     return convert_image(
         prompt, llm.Attachment(content=_image_to_bytes(image)), api_key, model

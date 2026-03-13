@@ -495,7 +495,7 @@ def clean_metadata_directory(directory: str, dry_run: bool = False) -> None:
         console.info(f"Found {len(candidate_dirs)} .meta directories to clean in {directory}")
         for meta_path in candidate_dirs:
             if dry_run:
-                tqdm.write(click.style(f"[dry-run] Would delete: {shorten_path(meta_path)}", fg="red"))
+                console.log(f"[dry-run] Would delete: {shorten_path(meta_path)}", fg="red")
             else:
                 try:
                     shutil.rmtree(meta_path)

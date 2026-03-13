@@ -66,6 +66,9 @@ class Config:
     prompt: str = TO_MARKDOWN_TEMPLATE
     # The prompt used to convert some image to plain text (used for header highlights (H1, H2, etc.))
     title_prompt: str = TO_TEXT_TEMPLATE
+    # Prompt to derive a short title from the full markdown output. {markdown} is substituted.
+    # Set to None to skip title derivation.
+    note_title_prompt: str | None = None
     # The jinja template used to output markdown files.
     template: str = DEFAULT_MD_TEMPLATE
     # The LLM model to use for conversion (e.g. gpt-4o-mini). Can be any model installed in the environment (https://llm.datasette.io/en/stable/plugins/index.html)

@@ -62,7 +62,7 @@ class Console:
         Log a message to the console with consistent formatting.
         Uses tqdm.write to play nice with progress bars.
         """
-        ts = datetime.now().strftime("%H:%M:%S")
+        ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         ts_prefix = f"[{ts}]"
         ts_colored = click.style(ts_prefix, fg="bright_black")
         
@@ -75,8 +75,10 @@ class Console:
             lines = msg.splitlines()
             first = lines[0]
             tqdm.write(f"{ts_colored} {click.style(first, fg=fg, bold=bold)}", file=sys.stdout)
+            sys.stdout.flush()
             for line in lines[1:]:
                 tqdm.write(f"{indent_str}{click.style(line, fg=fg)}", file=sys.stdout)
+                sys.stdout.flush()
             return
 
         # 1. Parse Tag/Level from first line if present
@@ -140,8 +142,10 @@ class Console:
         
         if tag_colored:
             tqdm.write(f"{ts_colored} {tag_colored} {body_colored}", file=sys.stdout)
+            sys.stdout.flush()
         else:
             tqdm.write(f"{ts_colored} {body_colored}", file=sys.stdout)
+            sys.stdout.flush()
             
         full_indent = indent_str + tag_sub_indent
         
@@ -155,6 +159,7 @@ class Console:
                  styled_line = click.style(line, fg="red")
             
             tqdm.write(f"{full_indent}{styled_line}", file=sys.stdout)
+            sys.stdout.flush()
 
     def debug(self, msg: str):
         if self.debug_mode:
