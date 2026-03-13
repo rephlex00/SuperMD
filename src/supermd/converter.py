@@ -5,13 +5,12 @@ import posixpath
 import json
 from pathlib import Path
 from typing import Generator
-from time import sleep, monotonic
 from contextlib import contextmanager
 from datetime import datetime
 from jinja2 import Template
 from tqdm import tqdm
 
-from supermd.types import ImageExtractor
+from supermd.types import ImageExtractor, CooldownState
 from supermd.config import SuperMDConfig
 from supermd.importers import get_extractor, SUPPORTED_EXTENSIONS
 from supermd.ai_utils import image_to_markdown
@@ -25,27 +24,6 @@ from supermd.context import create_basic_context, create_context
 from supermd.date_utils import expand_date_tokens
 from supermd.console import console
 
-
-class CooldownState:
-    """Enforces a minimum delay between consecutive API calls."""
-
-    def __init__(self, cooldown: float):
-        self.cooldown = cooldown
-        self._last_call: float | None = None
-
-    def wait(self, progress_bar=None) -> None:
-        if self.cooldown <= 0 or self._last_call is None:
-            return
-        step = 0.1
-        remaining = self.cooldown - (monotonic() - self._last_call)
-        while remaining > 0:
-            if progress_bar:
-                progress_bar.set_description(f"Cooldown: {remaining:.1f}s")
-            sleep(step)
-            remaining -= step
-
-    def mark(self) -> None:
-        self._last_call = monotonic()
 
 
 @contextmanager
@@ -432,22 +410,12 @@ def rebuild_metadata_for_file(
     basic_context = create_basic_context(file_basename, file_name)
     
     # Calculate where the output should be
-    ctime = basic_context.get("ctime")
-    def preprocess(s: str) -> str:
-        return expand_date_tokens(s, ctime) if ctime else s
-
-    output_path_template = Template(preprocess(config.output_path_template))
-    rel_output_path = output_path_template.render(basic_context)
-    full_output_dir = os.path.join(output_dir, rel_output_path)
-
-    # Calculate filename
-    output_filename_template = Template(preprocess(config.output_filename_template))
     try:
-        output_filename = output_filename_template.render({**basic_context, "images": []})
+        output_file_path = _calculate_output_path(config, {**basic_context, "images": []}, output_dir)
     except Exception:
-        output_filename = f"{file_basename}.md"
+        output_file_path = os.path.join(output_dir, f"{file_basename}.md")
 
-    output_file_path = os.path.join(full_output_dir, output_filename)
+    output_filename = os.path.basename(output_file_path)
     
     if os.path.exists(output_file_path):
         if dry_run:
@@ -460,7 +428,7 @@ def rebuild_metadata_for_file(
             image_files = "[]" 
             
             # expected_path should be relative to job output root.
-            expected_rel_path = os.path.join(rel_output_path, output_filename)
+            expected_rel_path = os.path.relpath(output_file_path, output_dir)
 
             metadata_manager.upsert_entry(
                 input_note_filename=os.path.basename(file_name),

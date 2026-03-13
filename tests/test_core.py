@@ -176,7 +176,7 @@ def test_verify_metadata_file_reprocess_broken(mock_exists):
     mock_exists.assert_called_with("/path/to/missing_output.md")
 
 @patch("supermd.converter.image_to_markdown", return_value="content")
-@patch("supermd.converter.sleep")
+@patch("supermd.types.sleep")
 def test_process_pages_cooldown(mock_sleep, mock_i2m, mock_config):
     """Test that cooldown sleep is called between API calls (not before the first call ever)."""
     from supermd.converter import process_pages, CooldownState

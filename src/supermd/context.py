@@ -6,6 +6,7 @@ from supermd.config import SuperMDConfig
 from supermd.supernotelib import Notebook
 from supermd.importers.note import convert_binary_to_image
 from supermd.ai_utils import image_to_text
+from supermd.types import CooldownState
 import re
 
 from supermd.ai_utils import markdown_to_title
@@ -96,7 +97,7 @@ def create_context(
     model: str,
     template_output: str,
     basic_context: dict,
-    cooldown_state=None,
+    cooldown_state: CooldownState | None = None,
 ) -> dict:
     images = []
     for png_path in pngs:
