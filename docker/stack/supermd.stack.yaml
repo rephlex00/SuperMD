@@ -1,0 +1,142 @@
+# =============================================================================
+# SuperMD Docker Configuration
+# =============================================================================
+# Pre-configured for use inside the Docker container.
+# Volume mount your directories to /input and /output in docker-compose.yml.
+#
+# API keys are passed as environment variables — never stored in this file.
+# Set them in a .env file (see .env.example) or in your shell environment.
+# =============================================================================
+
+
+# -----------------------------------------------------------------------------
+# LLM Model
+# -----------------------------------------------------------------------------
+# Set the model matching the API key you provided.
+# OpenAI (OPENAI_API_KEY):     gpt-4o-mini | gpt-4o
+# Google  (GEMINI_API_KEY):    gemini/gemini-2.5-flash | gemini/gemini-2.0-flash
+# Anthropic (ANTHROPIC_API_KEY): claude-haiku-4-5-20251001 | claude-sonnet-4-6
+
+model: gpt-4o-mini
+
+
+# -----------------------------------------------------------------------------
+# Note Title Derivation  (optional)
+# -----------------------------------------------------------------------------
+note_title_prompt: |
+  Given the following transcribed handwritten note, generate a concise title of 4 to 7 words.
+  Rules:
+  - Output only the title, nothing else.
+  - No quotes, no punctuation at the end.
+  - Use title case.
+  - Capture the main topic or purpose of the note.
+
+  Note:
+  {markdown}
+
+  Title:
+
+
+# -----------------------------------------------------------------------------
+# Output Path & Filename Templates
+# -----------------------------------------------------------------------------
+output_filename_template: "{{file_basename}}.md"
+output_path_template: "{{DATE:YYYY/MM MMM}}"
+
+
+# -----------------------------------------------------------------------------
+# Transcription Prompt
+# -----------------------------------------------------------------------------
+prompt: |
+  <context>
+  {context}
+  </context>
+  Convert the image to markdown:
+  - If there is a simple diagram that the mermaid syntax can achieve, create a mermaid codeblock of it.
+  - If most of the image is a drawing (not written text), add a #drawing tag and describe the drawing in no more than 8 words.
+  - When it is unclear what an image is, don't output anything for it.
+  - Use $$, $ latex math blocks for math equations.
+  - Support Obsidian syntaxes and dataview "field:: value" syntax.
+  - Do not wrap text in codeblocks.
+  - Use at most one blank line at a time; never produce consecutive blank lines.
+  - Preserve the original nesting: match each item's indentation level from the handwritten list.
+  - Use exactly 2 spaces per nesting level (never tabs). All siblings at the same depth must have identical indentation.
+  - Never skip a nesting level — a child must be indented exactly one level (2 spaces) deeper than its parent.
+  - Do not insert blank lines between items in the same list block.
+  - Treat something as a checklist only when you can clearly see a square checkbox immediately before the handwritten text.
+  - The first line should never be a blank line.
+
+  If the image contains what appears to be a heading:
+  - Determine a reasonable heading level based on visual prominence. (#, ##, ###, ####, #####)
+  - If a line is written entirely in all capital letters and stands alone, treat it as a heading.
+  - Do not skip heading levels within a page.
+
+
+# -----------------------------------------------------------------------------
+# Output File Template
+# -----------------------------------------------------------------------------
+template: |
+  ---
+  date: {{DATE:YYYY-MM-DD[T]HHmmss}}
+  dailynote: "[[{{DATE:[Moments]/YYYY/MM MMM/YYMMDD dddd}}]]"
+  title: "{{title}}"
+  type: supernote
+  notefile: {{file_basename}}.note
+  {% if images %}coverimage: attachments/{{images[0].name}}{% endif %}
+  ignoresnlock: false
+  tags: handwritten
+  ---
+  {{llm_output}}
+
+  ## Images
+  {% for image in images %}
+  ![{{ image.name }}]({{image.name}})
+  {%- endfor %}
+
+
+# -----------------------------------------------------------------------------
+# Processing Defaults
+# -----------------------------------------------------------------------------
+defaults:
+  force: false
+  progress: false   # disabled — progress bars don't render well in container logs
+  level: INFO
+  cooldown: 5.0
+
+
+# -----------------------------------------------------------------------------
+# Jobs
+# -----------------------------------------------------------------------------
+# Each job maps an input directory to an output directory.
+# /input and /output are the container paths defined in docker-compose.yml.
+#
+# Single-directory setup (most common):
+#   docker-compose volumes:
+#     - /your/notes:/input
+#     - /your/vault:/output
+
+jobs:
+  - name: Notes
+    input: /input
+    output: /output
+
+# Multi-directory setup: add one job per source, each with its own volume mount.
+# Update docker-compose.yml to add the extra volume binds, for example:
+#
+#   volumes:
+#     - /your/notes/personal:/input/personal
+#     - /your/notes/work:/input/work
+#     - /your/vault/personal:/output/personal
+#     - /your/vault/work:/output/work
+#
+# Then define the jobs:
+#
+#   jobs:
+#     - name: Personal
+#       input: /input/personal
+#       output: /output/personal
+#
+#     - name: Work
+#       input: /input/work
+#       output: /output/work
+#       # model: gemini/gemini-2.5-flash
