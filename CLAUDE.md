@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-SuperMD converts Supernote handwritten notes (`.note`, `.spd`, PDF, PNG) into Markdown via LLM transcription. It integrates with Obsidian vaults and supports batch processing, file watching, and a macOS launchd service.
+SuperMD converts Supernote handwritten notes (`.note`, `.spd`, PDF, PNG) into Markdown via LLM transcription. It integrates with Obsidian vaults and supports batch processing, file watching, a macOS launchd service, and Docker deployment (standalone container or full 3-service stack).
 
 ## Commands
 
@@ -56,6 +56,35 @@ The pipeline flows: CLI → Batches/Watcher → Converter → [Extractor + AI + 
 **`service.py`** — macOS launchd plist management for running SuperMD as a background service.
 
 **`console.py`** — Custom logging handler that integrates stdlib logging with styled console output and redirects `tqdm.write` to stdout.
+
+## Docker
+
+**Standalone** (`docker-compose.yml` at project root) — single SuperMD container in watch mode. API key passed via `.env`. Input/output via bind mounts.
+
+**Full stack** (`docker/stack/`) — 3-service pipeline:
+- `supernote-sync` — polls Supernote Cloud (optional, `--profile cloud`)
+- `supermd` — converts notes in watch mode
+- `obsidian-sync` — syncs vault via obsidian-headless CLI
+
+Key files:
+- `Dockerfile` — multi-stage build (builder installs uv + llm plugins; runtime uses Python 3.12-slim + gosu for UID remapping)
+- `entrypoint.sh` — drops privileges to `PUID`/`PGID` before running supermd
+- `docker/stack/docker-compose.yml` — full stack compose with secrets
+- `docker/stack/supermd-entrypoint.sh` — maps `LLM_PROVIDER` + secret file to the correct env var
+- `docker/stack/init-secrets.sh` — creates placeholder secret files
+
+Secrets in the stack are stored as files in `docker/stack/secrets/` (not env vars). The `supermd-entrypoint.sh` reads `/run/secrets/llm_api_key` and exports `OPENAI_API_KEY`/`GEMINI_API_KEY`/`ANTHROPIC_API_KEY` based on `LLM_PROVIDER`.
+
+```bash
+# Standalone
+docker compose up -d
+docker compose logs -f
+
+# Full stack
+cd docker/stack
+./init-secrets.sh
+docker compose --profile cloud up -d
+```
 
 ## Configuration
 

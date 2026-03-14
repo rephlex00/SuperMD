@@ -2,6 +2,17 @@
 
 Convert [Supernote](https://supernote.com/) `.note` files (and PDFs, PNGs, and Atelier `.spd` files) into Markdown using an LLM. Designed for syncing handwritten notes into an [Obsidian](https://obsidian.md/) vault.
 
+## Table of Contents
+
+- [Features](#features)
+- [Quick Start](#quick-start)
+- [Running the Project](#running-the-project)
+- [CLI Reference](#cli-reference)
+- [Template Variables](#template-variables)
+- [Development](#development)
+- [Documentation](#documentation)
+- [Acknowledgements](#acknowledgements)
+
 ## Features
 
 - **Multi-format input** — `.note`, `.pdf`, `.png`, `.spd` (Supernote Atelier)
@@ -17,9 +28,10 @@ Convert [Supernote](https://supernote.com/) `.note` files (and PDFs, PNGs, and A
 
 | Requirement | Notes |
 |---|---|
-| Python ≥ 3.11 | Required |
-| [uv](https://docs.astral.sh/uv/) | Recommended |
-| LLM API key | Required |
+| An **LLM API key** | Required — OpenAI, Gemini, or Anthropic |
+| Python ≥ 3.11 | Native install only |
+| [uv](https://docs.astral.sh/uv/) | Recommended for native install |
+| Docker + Compose v2 | Docker install only |
 
 > **Note:** Any model supported by the [llm](https://llm.datasette.io/en/stable/plugins/index.html) ecosystem works. The default is `gpt-4o-mini` (requires an OpenAI API key).
 
@@ -27,11 +39,54 @@ Convert [Supernote](https://supernote.com/) `.note` files (and PDFs, PNGs, and A
 
 ## Quick Start
 
+**Native:**
+
+```bash
+git clone https://github.com/rephlex00/SuperMD.git && cd SuperMD
+uv sync
+cp config/supermd.example.yaml config/supermd.yaml
+llm keys set openai
+supermd watch --config config/supermd.yaml
+```
+
+**Docker (standalone):**
+
+```bash
+git clone https://github.com/rephlex00/SuperMD.git && cd SuperMD
+cp config/supermd.example.yaml config/supermd.yaml
+cp .env.example .env  # add OPENAI_API_KEY and set PUID/PGID
+docker compose up -d
+```
+
+**Docker (full stack — Supernote Cloud → SuperMD → Obsidian Sync):**
+
+```bash
+cd docker/stack && ./init-secrets.sh
+# fill in secrets/llm_api_key, secrets/obsidian_email, secrets/obsidian_password
+cp .env.example .env && vim .env  # set LLM_PROVIDER, OBSIDIAN_VAULT_NAME, PUID, PGID
+docker compose --profile cloud up -d
+```
+
+---
+
+## Running the Project
+
+| Mode | Command | Guide |
+|---|---|---|
+| Native (single file) | `supermd file note.note -o ./output` | [docs/getting-started.md](docs/getting-started.md) |
+| Native (watch) | `supermd watch --config config/supermd.yaml` | [docs/getting-started.md](docs/getting-started.md) |
+| Docker standalone | `docker compose up -d` | [docs/running-docker.md](docs/running-docker.md) |
+| Docker full stack | `docker compose --profile cloud up -d` | [docs/docker-stack.md](docs/docker-stack.md) |
+
+---
+
+## Detailed Setup
+
 ### 1. Clone & install
 
 ```bash
 git clone https://github.com/rephlex00/SuperMD.git
-cd supermd
+cd SuperMD
 
 # Create venv and install (uv)
 uv sync
@@ -224,6 +279,20 @@ src/supermd/
 │   └── atelier.py   # Supernote Atelier .spd extractor
 └── supernotelib/    # Vendored Supernote parsing library
 ```
+
+---
+
+## Documentation
+
+| Guide | Description |
+|---|---|
+| [docs/getting-started.md](docs/getting-started.md) | Prerequisites, install, first run (all modes) |
+| [docs/running-docker.md](docs/running-docker.md) | Standalone Docker container setup |
+| [docs/docker-stack.md](docs/docker-stack.md) | Full 3-service stack (Supernote Cloud → SuperMD → Obsidian Sync) |
+| [docs/configuration.md](docs/configuration.md) | All config fields, defaults, environment variables |
+| [docs/commands.md](docs/commands.md) | Complete CLI reference |
+| [docs/templates.md](docs/templates.md) | Jinja2 template variables and DATE tokens |
+| [docker/stack/README.md](docker/stack/README.md) | Full stack setup and troubleshooting |
 
 ---
 
