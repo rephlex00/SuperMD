@@ -9,7 +9,7 @@ import shutil
 import sys
 import tempfile
 import time
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 from sncloud import SNClient
 from sncloud.models import Directory, File
@@ -53,35 +53,45 @@ def sync_directory(
             if not item.file_name.lower().endswith(extensions):
                 continue
 
+            # Path traversal guard: reject filenames containing separators or
+            # dot-prefixed names that could escape the output directory.
+            if (
+                "/" in item.file_name
+                or "\\" in item.file_name
+                or item.file_name.startswith(".")
+                or item.file_name != PurePosixPath(item.file_name).name
+            ):
+                print(
+                    f"[sncloud] WARNING: Skipping suspicious filename: {item.file_name!r}",
+                    flush=True,
+                )
+                continue
+
             local_file = local_root / item.file_name
 
-            # Skip if already downloaded and MD5 matches.
+            # Skip if already downloaded.
             if local_file.exists():
                 continue
 
             print(f"[sncloud] Downloading {remote_path}/{item.file_name}", flush=True)
+            tmp_dir: Path | None = None
             try:
-                # Download to a temp file first, then atomically move into place.
-                # This prevents SuperMD from processing a partially-written file.
-                with tempfile.NamedTemporaryFile(
-                    dir=local_root, delete=False, suffix=".tmp"
-                ) as tmp:
-                    tmp_path = Path(tmp.name)
-
-                client.get(f"{remote_path}/{item.file_name}", local_root)
-
-                # sncloud writes to local_root/<file_name> directly, so rename
-                # only if we used a temp path.  Since sncloud.get() writes
-                # directly, we rely on the watcher debounce (30s) for safety.
+                # Download to a temporary directory, then atomically rename into
+                # place.  This prevents SuperMD from processing a partially-written
+                # file (sncloud.get() writes to <path>/<file_name> directly).
+                tmp_dir = Path(tempfile.mkdtemp(dir=local_root))
+                client.get(f"{remote_path}/{item.file_name}", tmp_dir)
+                tmp_file = tmp_dir / item.file_name
+                tmp_file.rename(local_file)
                 downloaded += 1
 
             except Exception as e:
                 print(
                     f"[sncloud] ERROR downloading {item.file_name}: {e}", flush=True
                 )
-                # Clean up temp file if it exists.
-                if tmp_path.exists():
-                    tmp_path.unlink(missing_ok=True)
+            finally:
+                if tmp_dir is not None and tmp_dir.exists():
+                    shutil.rmtree(tmp_dir, ignore_errors=True)
 
     return downloaded
 

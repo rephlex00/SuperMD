@@ -21,7 +21,6 @@ read_secret() {
 AUTH_TOKEN=$(read_secret "obsidian_auth_token")
 OB_EMAIL=$(read_secret "obsidian_email")
 OB_PASSWORD=$(read_secret "obsidian_password")
-ENCRYPTION_PASS=$(read_secret "obsidian_encryption_password")
 
 if [ -n "$AUTH_TOKEN" ]; then
     echo "[obsidian] Using auth token from secret (keyring bypass)"
@@ -62,14 +61,10 @@ ob sync-setup --vault "$VAULT_NAME" --path /vault 2>/dev/null || {
     echo "[obsidian] Vault already configured or setup failed, continuing..."
 }
 
-# ── Configure E2EE if encryption password is provided ───────────────────────
-if [ -n "$ENCRYPTION_PASS" ]; then
-    echo "[obsidian] Configuring end-to-end encryption"
-    # The encryption password is typically set during sync-setup.
-    # If ob sync-config supports it, configure here.
-    ob sync-config --encryption-password "$ENCRYPTION_PASS" 2>/dev/null || true
-fi
-
 # ── Start continuous sync ───────────────────────────────────────────────────
+# NOTE: If your vault uses end-to-end encryption, ob sync-setup will prompt
+# for the encryption password interactively.  Run setup manually once:
+#   docker compose exec obsidian-sync ob sync-setup --vault "Name" --path /vault
+# The session is persisted in the obsidian-config volume.
 echo "[obsidian] Starting continuous sync for vault: ${VAULT_NAME}"
 exec ob sync --continuous

@@ -17,20 +17,25 @@
 # Sensitive credentials are stored as files in ./secrets/ and mounted
 # read-only at /run/secrets/ inside containers.  Never committed to git.
 secrets:
+  # ── Required ───────────────────────────────────────────────────────────────
   llm_api_key:
-    file: ./secrets/llm_api_key
-
-  supernote_email:
-    file: ./secrets/supernote_email
-  supernote_password:
-    file: ./secrets/supernote_password
+    file: ./secrets/llm_api_key            # OpenAI / Gemini / Anthropic key
 
   obsidian_email:
     file: ./secrets/obsidian_email
   obsidian_password:
     file: ./secrets/obsidian_password
-  obsidian_encryption_password:
-    file: ./secrets/obsidian_encryption_password
+
+  # ── Optional: leave files empty to disable ────────────────────────────────
+  # obsidian_auth_token: bypasses keyring login (leave empty to use email/password)
+  obsidian_auth_token:
+    file: ./secrets/obsidian_auth_token
+
+  # ── Cloud profile only (--profile cloud) ──────────────────────────────────
+  supernote_email:
+    file: ./secrets/supernote_email
+  supernote_password:
+    file: ./secrets/supernote_password
 
 # ── Volumes ─────────────────────────────────────────────────────────────────
 volumes:
@@ -95,7 +100,7 @@ services:
     secrets:
       - obsidian_email
       - obsidian_password
-      - obsidian_encryption_password
+      - obsidian_auth_token
     environment:
       - PUID=${PUID:-1000}
       - PGID=${PGID:-1000}

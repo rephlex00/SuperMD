@@ -23,10 +23,16 @@ Automated pipeline: **Supernote Cloud → SuperMD → Obsidian Sync**
 
 All sensitive credentials are stored as individual files in `secrets/` — never in `.env` or environment variables.
 
+First, create empty placeholder files for optional secrets:
+
 ```bash
 cd docker/stack
-mkdir -p secrets
+./init-secrets.sh
+```
 
+Then fill in the required secrets:
+
+```bash
 # Required — LLM API key
 echo -n "sk-your-openai-key" > secrets/llm_api_key
 
@@ -34,10 +40,10 @@ echo -n "sk-your-openai-key" > secrets/llm_api_key
 echo -n "you@example.com" > secrets/obsidian_email
 echo -n "your-obsidian-password" > secrets/obsidian_password
 
-# Optional — for E2EE vaults
-echo -n "your-encryption-password" > secrets/obsidian_encryption_password
+# Optional — Obsidian auth token (leave empty to use email/password login)
+# echo -n "your-auth-token" > secrets/obsidian_auth_token
 
-# Optional — only for Supernote Cloud sync (--profile cloud)
+# Optional — Supernote Cloud sync (--profile cloud only)
 echo -n "you@example.com" > secrets/supernote_email
 echo -n "your-supernote-password" > secrets/supernote_password
 ```
@@ -128,11 +134,7 @@ If Obsidian provides an `OBSIDIAN_AUTH_TOKEN` (check [Obsidian docs](https://hel
 echo -n "your-token" > secrets/obsidian_auth_token
 ```
 
-Then add to `docker-compose.yml` under `obsidian-sync.secrets`:
-```yaml
-secrets:
-  - obsidian_auth_token
-```
+The token secret is already wired into the compose file — filling in the placeholder file is all that's needed.
 
 ### Supernote Cloud sync not downloading files
 
