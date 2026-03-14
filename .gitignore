@@ -47,3 +47,6 @@ venv.bak/
 
 # Secrets
 secrets/
+docker/stack/.env
+docker/stack/secrets/*
+!docker/stack/secrets/.gitkeep

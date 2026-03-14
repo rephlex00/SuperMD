@@ -1,0 +1,105 @@
+# =============================================================================
+# SuperMD Full Stack: Supernote Cloud → SuperMD → Obsidian Sync
+# =============================================================================
+#
+# Three-service pipeline that automatically converts Supernote handwritten
+# notes to Markdown and syncs them to your Obsidian vault.
+#
+# Quick start:
+#   1. Create secret files in ./secrets/ (see README.md)
+#   2. Copy .env.example to .env and edit
+#   3. docker compose up -d                     (without Supernote Cloud)
+#      docker compose --profile cloud up -d     (with Supernote Cloud sync)
+#
+# =============================================================================
+
+# ── Secrets ─────────────────────────────────────────────────────────────────
+# Sensitive credentials are stored as files in ./secrets/ and mounted
+# read-only at /run/secrets/ inside containers.  Never committed to git.
+secrets:
+  llm_api_key:
+    file: ./secrets/llm_api_key
+
+  supernote_email:
+    file: ./secrets/supernote_email
+  supernote_password:
+    file: ./secrets/supernote_password
+
+  obsidian_email:
+    file: ./secrets/obsidian_email
+  obsidian_password:
+    file: ./secrets/obsidian_password
+  obsidian_encryption_password:
+    file: ./secrets/obsidian_encryption_password
+
+# ── Volumes ─────────────────────────────────────────────────────────────────
+volumes:
+  notes-data:                   # supernote-sync writes → supermd reads
+  vault-data:                   # supermd writes → obsidian-sync reads
+  obsidian-config:              # persists ob login credentials across restarts
+
+# ── Services ────────────────────────────────────────────────────────────────
+services:
+
+  # ── Supernote Cloud Sync (optional) ─────────────────────────────────────
+  # Only starts with: docker compose --profile cloud up
+  # Skip this if you mount .note files from a NAS or other sync tool.
+  supernote-sync:
+    build: ./supernote-sync
+    profiles: ["cloud"]
+    volumes:
+      - notes-data:/notes
+    secrets:
+      - supernote_email
+      - supernote_password
+    environment:
+      - PUID=${PUID:-1000}
+      - PGID=${PGID:-1000}
+      - SYNC_INTERVAL=${SYNC_INTERVAL:-300}
+      - SYNC_PATH=${SYNC_PATH:-/Note}
+    restart: unless-stopped
+
+  # ── SuperMD Converter ───────────────────────────────────────────────────
+  # Watches /input for .note files, converts to Markdown in /output.
+  supermd:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    volumes:
+      - notes-data:/input:ro
+      - vault-data:/output
+      - ${SUPERMD_CONFIG:-./supermd.stack.yaml}:/config/supermd.yaml:ro
+      - ./supermd-entrypoint.sh:/supermd-entrypoint.sh:ro
+    secrets:
+      - llm_api_key
+    environment:
+      - PUID=${PUID:-1000}
+      - PGID=${PGID:-1000}
+      - LLM_PROVIDER=${LLM_PROVIDER:-openai}
+    entrypoint: ["/supermd-entrypoint.sh"]
+    command: ["supermd", "--config", "/config/supermd.yaml", "watch"]
+    depends_on:
+      supernote-sync:
+        condition: service_started
+        required: false
+    restart: unless-stopped
+
+  # ── Obsidian Headless Sync ─────────────────────────────────────────────
+  # Continuously syncs the vault to Obsidian Sync via the official
+  # obsidian-headless CLI.  Requires an Obsidian Sync subscription.
+  obsidian-sync:
+    build: ./obsidian-sync
+    volumes:
+      - vault-data:/vault
+      - obsidian-config:/home/obsidian/.config
+    secrets:
+      - obsidian_email
+      - obsidian_password
+      - obsidian_encryption_password
+    environment:
+      - PUID=${PUID:-1000}
+      - PGID=${PGID:-1000}
+      - OBSIDIAN_VAULT_NAME=${OBSIDIAN_VAULT_NAME}
+    depends_on:
+      - supermd
+    restart: unless-stopped
