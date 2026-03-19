@@ -1,0 +1,22 @@
+# ── Supernote Cloud Sync ─────────────────────────────────────────────────────
+# Periodically downloads .note files from Supernote Cloud using the unofficial
+# sncloud Python library.  Authentication credentials are read from Docker
+# secrets at /run/secrets/.
+FROM python:3.12-slim
+
+RUN apt-get update && apt-get install -y --no-install-recommends git gosu \
+    && pip install --no-cache-dir "sncloud @ git+https://github.com/rnbennett/sncloud.git@main" \
+    && apt-get purge -y --auto-remove git \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN groupadd -g 1000 sncloud && \
+    useradd -u 1000 -g sncloud -s /bin/sh -d /home/sncloud -m sncloud
+
+RUN mkdir -p /notes /otp && chmod 777 /otp
+
+COPY entrypoint.sh /entrypoint.sh
+COPY sync.py /sync.py
+RUN chmod +x /entrypoint.sh
+
+ENTRYPOINT ["/entrypoint.sh"]
+CMD ["python3", "-u", "/sync.py"]

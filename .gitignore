@@ -27,8 +27,10 @@ wheels/
 .pytest_cache/
 MANIFEST
 
-# Virtual Environments
+# Virtual Environments / Docker secrets
 .env
+.env.local
+.env.docker
 .venv
 env/
 venv/
@@ -45,3 +47,6 @@ venv.bak/
 
 # Secrets
 secrets/
+docker/stack/.env
+docker/stack/secrets/*
+!docker/stack/secrets/.gitkeep

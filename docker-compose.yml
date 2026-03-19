@@ -1,0 +1,37 @@
+services:
+  supermd:
+    build: .
+    image: supermd:latest
+
+    # platform: linux/amd64  # uncomment if deploying to a Linux x86_64 server
+    #                         # from an Apple Silicon Mac (cross-compile via Docker Desktop)
+
+    volumes:
+      # ── Input: your Supernote files (.note, .spd, PDF, PNG) ────────────────
+      - /path/to/your/supernote/files:/input
+
+      # ── Output: destination for transcribed Markdown files ─────────────────
+      - /path/to/your/markdown/vault:/output
+
+      # ── Config: directory containing supermd.yaml ──────────────────────────
+      # Copy config/supermd.docker.yaml to config/supermd.yaml and edit it.
+      - ./config:/config
+
+    environment:
+      # ── User identity ───────────────────────────────────────────────────────
+      # Match to your host user so output files aren't owned by root.
+      # Run `id` in your terminal to find your UID and GID.
+      - PUID=${PUID:-1000}
+      - PGID=${PGID:-1000}
+
+      # ── API key ─────────────────────────────────────────────────────────────
+      # Provide the key for whichever LLM provider you configured in supermd.yaml.
+      # Values are read from the .env file in this directory (see .env.example).
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+
+    restart: unless-stopped
+
+    # Override the default watch command to run a one-shot batch conversion:
+    # command: ["supermd", "--config", "/config/supermd.yaml", "run"]

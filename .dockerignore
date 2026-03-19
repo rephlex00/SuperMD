@@ -1,0 +1,21 @@
+.git
+.gitignore
+.venv
+.pytest_cache
+__pycache__
+*.pyc
+*.pyo
+
+# Tests and docs are not needed in the image
+tests/
+docs/
+
+# User configs and secrets — these are volume-mounted at runtime
+config/supermd.yaml
+.env
+.env.*
+
+# Editor and OS artifacts
+.vscode/
+.idea/
+.DS_Store
