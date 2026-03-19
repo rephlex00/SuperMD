@@ -26,7 +26,10 @@ def format_date(date_obj: datetime, format_str: str) -> str:
     - dddd: Full day name
     - ddd: Short day name
     - d: Day of week (0-6, Sun-Sat or Mon-Sun depending on locale, here we use Python's)
-    
+    - HH: 2-digit hour (24h)
+    - mm: 2-digit minute
+    - ss: 2-digit second
+
     Text inside [] is escaped.
     """
     
@@ -60,6 +63,9 @@ def format_date(date_obj: datetime, format_str: str) -> str:
         ("dddd", "%A"),
         ("ddd", "%a"),
         ("d", "%w"), # 0=Sunday, 6=Saturday
+        ("HH", "%H"),
+        ("mm", "%M"),
+        ("ss", "%S"),
     ]
     
     # 3. Apply replacements
@@ -86,6 +92,9 @@ def format_date(date_obj: datetime, format_str: str) -> str:
         "dddd": date_obj.strftime("%A"),
         "ddd": date_obj.strftime("%a"),
         "d": date_obj.strftime("%w"),
+        "HH": f"{date_obj.hour:02d}",
+        "mm": f"{date_obj.minute:02d}",
+        "ss": f"{date_obj.second:02d}",
     }
     
     # We need to iterate through the string and replace tokens.
