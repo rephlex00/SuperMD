@@ -309,6 +309,37 @@ SuperMD vendors the following libraries directly into its source tree rather tha
 |---|---|---|---|
 | `supernotelib` | `src/supermd/supernotelib/` | [jya-dev/supernote-tool](https://github.com/jya-dev/supernote-tool) (Apache-2.0, © 2020 jya) | Vendored to apply patches for blank-image edge cases and to pin to a specific format revision without depending on an upstream release cadence |
 
+### Key Python dependencies
+
+| Package | Purpose | Link |
+|---|---|---|
+| `llm` | LLM abstraction layer — powers all AI transcription and title generation calls | [llm.datasette.io](https://llm.datasette.io/) |
+| `llm-ollama` | Plugin adding local Ollama model support to `llm` | [github.com/taketwo/llm-ollama](https://github.com/taketwo/llm-ollama) |
+| `click` | CLI framework | [click.palletsprojects.com](https://click.palletsprojects.com/) |
+| `Jinja2` | Template engine for Markdown output | [jinja.palletsprojects.com](https://jinja.palletsprojects.com/) |
+| `pydantic` | Config validation and data modelling | [docs.pydantic.dev](https://docs.pydantic.dev/) |
+| `PyMuPDF` | PDF page extraction | [pymupdf.readthedocs.io](https://pymupdf.readthedocs.io/) |
+| `Pillow` | Image processing and PNG handling | [python-pillow.org](https://python-pillow.org/) |
+| `watchdog` | Cross-platform filesystem event monitoring | [github.com/gorakhargosh/watchdog](https://github.com/gorakhargosh/watchdog) |
+| `tqdm` | Progress bars | [tqdm.github.io](https://tqdm.github.io/) |
+| `PyYAML` | YAML config parsing | [pyyaml.org](https://pyyaml.org/) |
+| `pypng` | PNG read/write (used by supernotelib) | [github.com/drj11/pypng](https://github.com/drj11/pypng) |
+| `potracer` | Bitmap-to-vector tracing (used by supernotelib) | [github.com/tatarize/potrace](https://github.com/tatarize/potrace) |
+| `svgwrite` | SVG generation (used by supernotelib) | [github.com/mozman/svgwrite](https://github.com/mozman/svgwrite) |
+| `svglib` | SVG rendering (used by supernotelib) | [github.com/deeplook/svglib](https://github.com/deeplook/svglib) |
+| `colour` | Color parsing and conversion (used by supernotelib) | [github.com/vaab/colour](https://github.com/vaab/colour) |
+| `platformdirs` | Platform-appropriate data/config directory paths | [github.com/tox-dev/platformdirs](https://github.com/tox-dev/platformdirs) |
+| `numpy` | Array operations for image data | [numpy.org](https://numpy.org/) |
+
+### Docker stack components
+
+| Component | Purpose | Link |
+|---|---|---|
+| `sncloud` (rnbennett fork) | Supernote Cloud API client — used by the `supernote-sync` service to download `.note` files. This fork adds CSRF token handling and OTP/E1760 device-verification support missing from the original. | [github.com/rnbennett/sncloud](https://github.com/rnbennett/sncloud) |
+| `obsidian-headless` | Official Obsidian CLI for headless vault sync — used by the `obsidian-sync` service | [github.com/obsidianmd/obsidian-headless](https://github.com/obsidianmd/obsidian-headless) |
+| `gosu` | Lightweight privilege-dropping tool used in container entrypoints to run processes as the configured `PUID`/`PGID` | [github.com/tianon/gosu](https://github.com/tianon/gosu) |
+| `uv` | Fast Python package manager and project tool (recommended for native installs) | [docs.astral.sh/uv](https://docs.astral.sh/uv/) |
+
 ---
 
 ## License
