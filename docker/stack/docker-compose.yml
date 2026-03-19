@@ -6,9 +6,8 @@
 # notes to Markdown and syncs them to your Obsidian vault.
 #
 # Quick start:
-#   1. Create secret files in ./secrets/ (see README.md)
-#   2. Copy .env.example to .env and edit
-#   3. docker compose up -d                     (without Supernote Cloud)
+#   1. docker compose run --rm setup            (interactive first-time config)
+#   2. docker compose up -d                     (without Supernote Cloud)
 #      docker compose --profile cloud up -d     (with Supernote Cloud sync)
 #
 # =============================================================================
@@ -30,21 +29,41 @@ secrets:
   # obsidian_auth_token: bypasses keyring login (leave empty to use email/password)
   obsidian_auth_token:
     file: ./secrets/obsidian_auth_token
+  # obsidian_vault_password: E2E encryption password (leave empty for standard encryption)
+  obsidian_vault_password:
+    file: ./secrets/obsidian_vault_password
 
   # ── Cloud profile only (--profile cloud) ──────────────────────────────────
   supernote_email:
     file: ./secrets/supernote_email
   supernote_password:
     file: ./secrets/supernote_password
+  supernote_token:
+    file: ./secrets/supernote_token
 
 # ── Volumes ─────────────────────────────────────────────────────────────────
 volumes:
   notes-data:                   # supernote-sync writes → supermd reads
   vault-data:                   # supermd writes → obsidian-sync reads
   obsidian-config:              # persists ob login credentials across restarts
+  obsidian-keyring:             # persists gnome-keyring data (manual auth survives restarts)
 
 # ── Services ────────────────────────────────────────────────────────────────
 services:
+
+  # ── First-time Setup ────────────────────────────────────────────────────
+  # Interactive config wizard.  Run once before starting the stack:
+  #   docker compose run --rm setup
+  #   docker compose run --rm setup --reset   (clear all secrets and .env)
+  setup:
+    image: bash:latest
+    profiles: ["setup"]
+    volumes:
+      - .:/stack
+    working_dir: /stack
+    stdin_open: true
+    tty: true
+    entrypoint: ["/stack/setup.sh"]
 
   # ── Supernote Cloud Sync (optional) ─────────────────────────────────────
   # Only starts with: docker compose --profile cloud up
@@ -57,6 +76,7 @@ services:
     secrets:
       - supernote_email
       - supernote_password
+      - supernote_token
     environment:
       - PUID=${PUID:-1000}
       - PGID=${PGID:-1000}
@@ -97,10 +117,12 @@ services:
     volumes:
       - vault-data:/vault
       - obsidian-config:/home/obsidian/.config
+      - obsidian-keyring:/home/obsidian/.local/share/keyrings
     secrets:
       - obsidian_email
       - obsidian_password
       - obsidian_auth_token
+      - obsidian_vault_password
     environment:
       - PUID=${PUID:-1000}
       - PGID=${PGID:-1000}

@@ -28,24 +28,24 @@ if [ -n "$AUTH_TOKEN" ]; then
 elif [ -n "$OB_EMAIL" ] && [ -n "$OB_PASSWORD" ]; then
     echo "[obsidian] Logging in with email/password..."
 
-    # Start D-Bus session if not already running.
-    if [ -z "$DBUS_SESSION_BUS_ADDRESS" ]; then
-        eval "$(dbus-launch --sh-syntax 2>/dev/null)" || true
-        export DBUS_SESSION_BUS_ADDRESS
+    # D-Bus + gnome-keyring are started by entrypoint.sh and shared with exec sessions.
+
+    # Skip login if a valid session already exists (e.g. after manual auth).
+    if ob sync-list-remote >/dev/null 2>&1; then
+        echo "[obsidian] Already authenticated, skipping login"
+    else
+        ob login --email "$OB_EMAIL" --password "$OB_PASSWORD" || {
+            echo "[obsidian] WARNING: automated login failed (2FA required?)."
+            echo "[obsidian] Log in manually in another terminal:"
+            echo "[obsidian]   docker compose exec -u obsidian obsidian-sync sh -c '. ~/.dbus-env && ob login'"
+            echo "[obsidian] Waiting for authentication..."
+            until ob sync-list-remote >/dev/null 2>&1; do
+                sleep 15
+            done
+            echo "[obsidian] Authentication detected, continuing..."
+        }
+        echo "[obsidian] Login successful"
     fi
-
-    # Unlock gnome-keyring with an empty password so libsecret can store creds.
-    echo "" | gnome-keyring-daemon --unlock --components=secrets 2>/dev/null || true
-
-    ob login --email "$OB_EMAIL" --password "$OB_PASSWORD" || {
-        echo "[obsidian] WARNING: automated login failed."
-        echo "[obsidian] You can log in manually with:"
-        echo "[obsidian]   docker compose exec obsidian-sync ob login"
-        echo "[obsidian] Waiting 60s before retrying..."
-        sleep 60
-        exit 1
-    }
-    echo "[obsidian] Login successful"
 else
     echo "[obsidian] ERROR: No credentials provided."
     echo "[obsidian] Provide either obsidian_auth_token or obsidian_email + obsidian_password secrets."
@@ -55,16 +55,24 @@ fi
 
 # ── Vault setup ─────────────────────────────────────────────────────────────
 VAULT_NAME="${OBSIDIAN_VAULT_NAME:?OBSIDIAN_VAULT_NAME environment variable is required}"
+VAULT_PASSWORD=$(read_secret "obsidian_vault_password")
 
 echo "[obsidian] Setting up vault: ${VAULT_NAME}"
-ob sync-setup --vault "$VAULT_NAME" --path /vault 2>/dev/null || {
+
+# Build the sync-setup command with optional E2E password.
+SETUP_CMD="ob sync-setup --vault \"$VAULT_NAME\" --path /vault"
+if [ -n "$VAULT_PASSWORD" ]; then
+    echo "[obsidian] E2E vault password provided"
+    SETUP_CMD="$SETUP_CMD --password \"$VAULT_PASSWORD\""
+fi
+
+eval "$SETUP_CMD" 2>&1 || {
     echo "[obsidian] Vault already configured or setup failed, continuing..."
+    echo "[obsidian] If E2E encrypted, provide the password in secrets/obsidian_vault_password"
+    echo "[obsidian] or run manually:"
+    echo "[obsidian]   docker compose exec -u obsidian obsidian-sync ob sync-setup --vault \"$VAULT_NAME\" --path /vault"
 }
 
 # ── Start continuous sync ───────────────────────────────────────────────────
-# NOTE: If your vault uses end-to-end encryption, ob sync-setup will prompt
-# for the encryption password interactively.  Run setup manually once:
-#   docker compose exec obsidian-sync ob sync-setup --vault "Name" --path /vault
-# The session is persisted in the obsidian-config volume.
 echo "[obsidian] Starting continuous sync for vault: ${VAULT_NAME}"
-exec ob sync --continuous
+exec ob sync --path /vault --continuous

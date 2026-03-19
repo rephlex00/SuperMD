@@ -61,9 +61,8 @@ docker compose up -d
 **Docker (full stack — Supernote Cloud → SuperMD → Obsidian Sync):**
 
 ```bash
-cd docker/stack && ./init-secrets.sh
-# fill in secrets/llm_api_key, secrets/obsidian_email, secrets/obsidian_password
-cp .env.example .env && vim .env  # set LLM_PROVIDER, OBSIDIAN_VAULT_NAME, PUID, PGID
+cd docker/stack
+docker compose run --rm setup         # interactive wizard creates secrets + .env
 docker compose --profile cloud up -d
 ```
 

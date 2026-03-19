@@ -19,49 +19,40 @@ Automated pipeline: **Supernote Cloud → SuperMD → Obsidian Sync**
 
 ## Quick Start
 
-### 1. Create secrets
+### 1. Run the setup wizard
 
-All sensitive credentials are stored as individual files in `secrets/` — never in `.env` or environment variables.
-
-First, create empty placeholder files for optional secrets:
+The interactive setup wizard creates secret files, the `.env` configuration, and optionally tests your credentials (including Supernote Cloud OTP verification).
 
 ```bash
 cd docker/stack
-./init-secrets.sh
+docker compose run --rm setup
+# or run directly: ./setup.sh
 ```
 
-Then fill in the required secrets:
+To reset all secrets and `.env`:
+```bash
+docker compose run --rm setup --reset
+```
+
+<details>
+<summary>Manual setup (without the wizard)</summary>
 
 ```bash
-# Required — LLM API key
-echo -n "sk-your-openai-key" > secrets/llm_api_key
-
-# Required — Obsidian Sync credentials
+./init-secrets.sh                     # create placeholder files
+echo -n "sk-..." > secrets/llm_api_key
 echo -n "you@example.com" > secrets/obsidian_email
-echo -n "your-obsidian-password" > secrets/obsidian_password
-
-# Optional — Obsidian auth token (leave empty to use email/password login)
-# echo -n "your-auth-token" > secrets/obsidian_auth_token
-
-# Optional — Supernote Cloud sync (--profile cloud only)
+echo -n "your-password" > secrets/obsidian_password
+# Optional (cloud profile only):
 echo -n "you@example.com" > secrets/supernote_email
-echo -n "your-supernote-password" > secrets/supernote_password
+echo -n "your-password" > secrets/supernote_password
+cp .env.example .env                  # then edit LLM_PROVIDER, OBSIDIAN_VAULT_NAME, PUID, PGID
 ```
 
 > **Tip:** Use `echo -n` (no trailing newline) to avoid whitespace issues.
 
-### 2. Configure environment
+</details>
 
-```bash
-cp .env.example .env
-```
-
-Edit `.env` to set:
-- `LLM_PROVIDER` — `openai`, `gemini`, or `anthropic` (must match your API key)
-- `OBSIDIAN_VAULT_NAME` — your remote vault name on Obsidian Sync
-- `PUID` / `PGID` — your host user's UID/GID (run `id` to check)
-
-### 3. Start the stack
+### 2. Start the stack
 
 **With Supernote Cloud sync:**
 ```bash
@@ -160,6 +151,6 @@ For production use, consider bind mounts instead of named volumes.
 
 ## Architecture
 
-- **supernote-sync** — Python container using [sncloud](https://github.com/julianprester/sncloud) (unofficial Supernote Cloud API). Periodically polls for new `.note` files.
+- **supernote-sync** — Python container using a [fork of sncloud](https://github.com/rnbennett/sncloud) (unofficial Supernote Cloud API with CSRF + OTP support). Periodically polls for new `.note` files. New device logins require email OTP verification; the setup wizard handles this and saves a JWT token to `secrets/supernote_token`.
 - **supermd** — Existing SuperMD container in watch mode. Converts `.note` → Markdown via LLM.
 - **obsidian-sync** — Node.js container running [obsidian-headless](https://github.com/obsidianmd/obsidian-headless) (official). Continuously syncs the vault bidirectionally with Obsidian Sync.

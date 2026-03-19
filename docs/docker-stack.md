@@ -6,6 +6,13 @@ The full stack deployment automates the entire Supernote-to-Obsidian pipeline us
 2. **supermd** — Converts handwritten notes to Markdown via LLM
 3. **obsidian-sync** — Syncs the output vault to Obsidian Sync
 
+An interactive setup wizard handles secrets and `.env` creation:
+
+```bash
+cd docker/stack
+docker compose run --rm setup      # or ./setup.sh if running outside Docker
+```
+
 All configuration and setup documentation lives in [`docker/stack/README.md`](../docker/stack/README.md).
 
 ## Comparison with Standalone Docker
@@ -41,13 +48,16 @@ Required secrets:
 | `llm_api_key` | supermd | OpenAI, Gemini, or Anthropic API key |
 | `obsidian_email` | obsidian-sync | Obsidian account email |
 | `obsidian_password` | obsidian-sync | Obsidian account password |
-| `obsidian_encryption_password` | obsidian-sync | E2EE password (optional) |
+| `obsidian_vault_password` | obsidian-sync | E2EE vault encryption password (optional) |
 | `supernote_email` | supernote-sync | Supernote Cloud email (cloud profile only) |
 | `supernote_password` | supernote-sync | Supernote Cloud password (cloud profile only) |
+| `supernote_token` | supernote-sync | Saved JWT access token (cloud profile only, optional) |
 
 ## Supernote Cloud Sync
 
-The `supernote-sync` service uses the [sncloud](https://github.com/julianprester/sncloud) Python library — an unofficial reverse-engineered client for the Supernote Cloud API. It periodically polls for new `.note` files and downloads them.
+The `supernote-sync` service uses a [fork of sncloud](https://github.com/rnbennett/sncloud) — an unofficial reverse-engineered client for the Supernote Cloud API with CSRF token and OTP verification support. It periodically polls for new `.note` files and downloads them.
+
+New device logins require email OTP verification (E1760 flow). The `setup.sh` wizard handles this interactively and saves the resulting JWT access token to `secrets/supernote_token` for automated restarts.
 
 This service is **optional** and only starts with the `cloud` Docker Compose profile:
 

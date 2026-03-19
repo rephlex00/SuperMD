@@ -108,9 +108,7 @@ See [docker-stack.md](docker-stack.md) and [`docker/stack/README.md`](../docker/
 
 ```bash
 cd docker/stack
-./init-secrets.sh
-# Fill in secrets/llm_api_key, secrets/obsidian_email, secrets/obsidian_password
-cp .env.example .env && vim .env
+docker compose run --rm setup         # interactive wizard creates secrets + .env
 
 docker compose --profile cloud up -d  # with Supernote Cloud
 docker compose up -d                  # without Supernote Cloud

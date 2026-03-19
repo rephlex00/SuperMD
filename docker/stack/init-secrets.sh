@@ -26,10 +26,14 @@ echo "Initialising secret placeholders..."
 # Optional: Obsidian auth token.  Leave empty to use email/password login.
 create_if_missing obsidian_auth_token
 
+# Optional: E2E vault encryption password.  Leave empty for standard encryption.
+create_if_missing obsidian_vault_password
+
 # Cloud profile only: Supernote Cloud credentials.
 # Leave empty if you mount .note files from a NAS or local directory instead.
 create_if_missing supernote_email
 create_if_missing supernote_password
+create_if_missing supernote_token
 
 echo ""
 echo "Now fill in the REQUIRED secrets (these must not be empty):"

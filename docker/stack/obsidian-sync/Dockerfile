@@ -9,12 +9,20 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         gnome-keyring \
         dbus-x11 \
         libsecret-1-0 \
+        python3 \
+        make \
+        g++ \
     && rm -rf /var/lib/apt/lists/*
 
 RUN npm install -g obsidian-headless && npm cache clean --force
 
-RUN groupadd -g 1000 obsidian && \
-    useradd -u 1000 -g obsidian -s /bin/sh -d /home/obsidian -m obsidian
+# Remove build tools no longer needed at runtime.
+RUN apt-get purge -y --auto-remove python3 make g++ \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN groupmod -n obsidian node && \
+    usermod -l obsidian -d /home/obsidian -m node && \
+    usermod -s /bin/sh obsidian
 
 RUN mkdir -p /vault
 
