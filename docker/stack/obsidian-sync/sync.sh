@@ -75,4 +75,4 @@ eval "$SETUP_CMD" 2>&1 || {
 
 # ── Start continuous sync ───────────────────────────────────────────────────
 echo "[obsidian] Starting continuous sync for vault: ${VAULT_NAME}"
-exec ob sync --path /vault --continuous
+ob sync --path /vault --continuous 2>&1 | grep -v "Fully Synced"

@@ -177,6 +177,19 @@ def watch(config, jobs, delay):
     from .watcher import run_watcher
     run_watcher(config, parallelism=jobs, delay=delay)
 
+@cli.command()
+@click.option("--config", "-c", default="config/supermd.yaml", help="Path to supermd.yaml config file")
+@click.option("--port", "-p", default=8734, type=int, help="Port for the GUI server (default: 8734)")
+def gui(config, port):
+    """Launch web-based configuration editor.
+
+    Opens a browser with a form-based GUI for editing the SuperMD YAML
+    config file.  Note: saving through the GUI will strip YAML comments.
+    """
+    from .gui import start_server
+    start_server(config, port)
+
+
 @cli.group()
 def meta():
     """Manage metadata"""

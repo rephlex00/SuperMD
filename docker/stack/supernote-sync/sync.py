@@ -210,9 +210,6 @@ def main() -> None:
             count = sync_directory(client, sync_path, output)
             if count:
                 print(f"[sncloud] Downloaded {count} file(s)", flush=True)
-            print(
-                f"[sncloud] Sync complete, next check in {interval}s", flush=True
-            )
         except Exception as e:
             print(f"[sncloud] ERROR during sync: {e}", flush=True)
             # Re-login in case the session expired.
