@@ -63,7 +63,11 @@ def run_watcher(config_path: str, parallelism: int = 1, delay: float = 30.0):
         return
 
     console.log(f"[watch] Watching directories: {', '.join(watch_dirs)}")
-    
+
+    # Rebuild metadata and run initial sync on startup
+    console.log("[watch] Running initial sync...")
+    run_batches(config_path, parallelism)
+
     event_handler = DebouncedEventHandler()
     
     observer = Observer()

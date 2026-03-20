@@ -116,9 +116,12 @@ defaults:
 #     - /your/vault:/output
 
 jobs:
-  - name: Notes
-    input: /input
-    output: /output
+  - name: Personal
+    input: /input/Personal
+    output: /output/Notebook/Personal
+  - name: Lists
+    input: /input/Lists
+    output: /output/Notebook/Lists
 
 # Multi-directory setup: add one job per source, each with its own volume mount.
 # Update docker-compose.yml to add the extra volume binds, for example:

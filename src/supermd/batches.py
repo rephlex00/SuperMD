@@ -2,7 +2,7 @@ import os
 import sys
 import concurrent.futures
 
-from supermd.converter import convert_directory
+from supermd.converter import convert_directory, rebuild_metadata_directory
 from supermd.config import SuperMDConfig, JobDefinition, load_config
 from supermd.ai_utils import MissingAPIKeyError, validate_model_key
 from supermd.console import console
@@ -79,6 +79,16 @@ def run_batches(config_path: str, parallelism: int = 1, dry_run: bool = False, d
         console.log(f"      Input: {resolved['input']}")
         console.log(f"      Output: {resolved['output']}")
         console.log(f"      Process: force={resolved['force']} model={resolved['model']} cooldown={resolved['cooldown']}s")
+
+    # Rebuild metadata so skip logic reflects current input/output state
+    console.log("[startup] Rebuilding metadata...")
+    for job in jobs:
+        resolved = config.resolve_job(job)
+        in_path = resolved["input"]
+        out_path = resolved["output"]
+        if os.path.exists(in_path):
+            rebuild_metadata_directory(in_path, out_path, config)
+    console.log("[startup] Metadata rebuild complete.")
 
     # Validate API keys for all models before starting any jobs
     models_seen = set()
