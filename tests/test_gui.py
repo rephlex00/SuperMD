@@ -8,7 +8,7 @@ import urllib.error
 import pytest
 from ruamel.yaml import YAML
 
-from supermd.gui import ConfigHandler, HTML_PAGE, _update_yaml_doc, _to_plain
+from supermd.gui import ConfigHandler, HTML_PAGE, _update_yaml_doc, _to_plain, start_server
 from ruamel.yaml.comments import CommentedMap
 from ruamel.yaml.scalarstring import LiteralScalarString
 from http.server import HTTPServer
@@ -67,12 +67,27 @@ def config_file(tmp_path):
 def server(config_file):
     """Start a GUI server on a random port and yield the base URL."""
     ConfigHandler.config_path = str(config_file)
+    ConfigHandler.auth_token = ""  # no auth for existing tests
     httpd = HTTPServer(("127.0.0.1", 0), ConfigHandler)
     port = httpd.server_address[1]
     t = threading.Thread(target=httpd.serve_forever, daemon=True)
     t.start()
     yield f"http://127.0.0.1:{port}"
     httpd.shutdown()
+
+
+@pytest.fixture
+def auth_server(config_file):
+    """Start a GUI server with token auth enabled."""
+    ConfigHandler.config_path = str(config_file)
+    ConfigHandler.auth_token = "test-secret-token"
+    httpd = HTTPServer(("127.0.0.1", 0), ConfigHandler)
+    port = httpd.server_address[1]
+    t = threading.Thread(target=httpd.serve_forever, daemon=True)
+    t.start()
+    yield f"http://127.0.0.1:{port}"
+    httpd.shutdown()
+    ConfigHandler.auth_token = ""
 
 
 def _get(url):
@@ -239,3 +254,75 @@ class TestToPlain:
         assert result == {"a": 1, "b": {"c": 2}}
         assert type(result) is dict
         assert type(result["b"]) is dict
+
+
+class TestAuth:
+    def test_api_rejects_without_token(self, auth_server):
+        """API calls without a token should get 401."""
+        req = urllib.request.Request(auth_server + "/api/config")
+        try:
+            urllib.request.urlopen(req)
+            assert False, "Expected 401"
+        except urllib.error.HTTPError as e:
+            assert e.code == 401
+
+    def test_api_rejects_wrong_token(self, auth_server):
+        """API calls with a wrong token should get 401."""
+        req = urllib.request.Request(
+            auth_server + "/api/config",
+            headers={"Authorization": "Bearer wrong-token"},
+        )
+        try:
+            urllib.request.urlopen(req)
+            assert False, "Expected 401"
+        except urllib.error.HTTPError as e:
+            assert e.code == 401
+
+    def test_api_accepts_correct_token(self, auth_server):
+        """API calls with correct token should succeed."""
+        req = urllib.request.Request(
+            auth_server + "/api/config",
+            headers={"Authorization": "Bearer test-secret-token"},
+        )
+        with urllib.request.urlopen(req) as resp:
+            assert resp.status == 200
+
+    def test_html_page_served_without_token(self, auth_server):
+        """The HTML page itself should be served without auth (it embeds the token)."""
+        with urllib.request.urlopen(auth_server + "/") as resp:
+            assert resp.status == 200
+            body = resp.read().decode()
+            assert "test-secret-token" in body
+
+    def test_post_rejects_without_token(self, auth_server):
+        """POST should also require auth."""
+        body = json.dumps({"model": "test"}).encode()
+        req = urllib.request.Request(
+            auth_server + "/api/config",
+            data=body,
+            headers={"Content-Type": "application/json"},
+        )
+        try:
+            urllib.request.urlopen(req)
+            assert False, "Expected 401"
+        except urllib.error.HTTPError as e:
+            assert e.code == 401
+
+    def test_post_accepts_correct_token(self, auth_server):
+        """POST with correct token should work."""
+        payload = {
+            "model": "gpt-4o-mini",
+            "defaults": {"force": False, "progress": True, "level": "INFO", "cooldown": 5.0},
+            "jobs": [],
+        }
+        body = json.dumps(payload).encode()
+        req = urllib.request.Request(
+            auth_server + "/api/config",
+            data=body,
+            headers={
+                "Content-Type": "application/json",
+                "Authorization": "Bearer test-secret-token",
+            },
+        )
+        with urllib.request.urlopen(req) as resp:
+            assert resp.status == 200

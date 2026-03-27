@@ -109,6 +109,26 @@ services:
         required: false
     restart: unless-stopped
 
+  # ── Configuration GUI (optional) ───────────────────────────────────────
+  # Web-based config editor accessible over your network (e.g. Tailscale).
+  # Start with: docker compose --profile gui up -d
+  # The auth token is printed in the container logs.
+  supermd-gui:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    profiles: ["gui"]
+    ports:
+      - "${SUPERMD_GUI_PORT:-8734}:8734"
+    volumes:
+      - ${SUPERMD_CONFIG:-./supermd.stack.yaml}:/config/supermd.yaml
+    environment:
+      - PUID=${PUID:-1000}
+      - PGID=${PGID:-1000}
+      - SUPERMD_GUI_TOKEN=${SUPERMD_GUI_TOKEN:-}
+    command: ["supermd", "--config", "/config/supermd.yaml", "gui", "--host", "0.0.0.0", "--port", "8734"]
+    restart: unless-stopped
+
   # ── Obsidian Headless Sync ─────────────────────────────────────────────
   # Continuously syncs the vault to Obsidian Sync via the official
   # obsidian-headless CLI.  Requires an Obsidian Sync subscription.

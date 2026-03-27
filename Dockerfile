@@ -54,6 +54,9 @@ RUN mkdir -p /input /output /config
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
+# GUI port (only used when running the gui subcommand)
+EXPOSE 8734
+
 # Container starts as root so entrypoint.sh can adjust UID/GID, then drops
 # to the supermd user before executing the main command.
 ENTRYPOINT ["/entrypoint.sh"]

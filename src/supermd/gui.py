@@ -2,6 +2,7 @@
 
 import json
 import os
+import secrets
 import webbrowser
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from io import StringIO
@@ -74,6 +75,7 @@ HTML_PAGE = r"""<!DOCTYPE html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="auth-token" content="__SUPERMD_AUTH_TOKEN__">
 <title>SuperMD Configuration</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
 <style>
@@ -211,12 +213,20 @@ document.addEventListener('input', e => {
   }
 });
 
+// --- Auth ---
+const _token = document.querySelector('meta[name="auth-token"]')?.content || '';
+function _headers(extra) {
+  const h = Object.assign({}, extra || {});
+  if (_token) h['Authorization'] = 'Bearer ' + _token;
+  return h;
+}
+
 // --- Config load/save ---
 async function loadConfig() {
   try {
     const [cfgRes, pathRes] = await Promise.all([
-      fetch('/api/config'),
-      fetch('/api/config/path')
+      fetch('/api/config', {headers: _headers()}),
+      fetch('/api/config/path', {headers: _headers()})
     ]);
     const cfg = await cfgRes.json();
     const pathData = await pathRes.json();
@@ -305,7 +315,7 @@ async function saveConfig() {
   try {
     const res = await fetch('/api/config', {
       method: 'POST',
-      headers: {'Content-Type': 'application/json'},
+      headers: _headers({'Content-Type': 'application/json'}),
       body: JSON.stringify(gatherConfig())
     });
     const data = await res.json();
@@ -390,10 +400,20 @@ class ConfigHandler(BaseHTTPRequestHandler):
     """Serves the config GUI SPA and REST API."""
 
     config_path: str = ""
+    auth_token: str = ""  # empty = no auth required
 
     def log_message(self, format, *args):  # noqa: A002
         # Silence default stderr logging
         pass
+
+    # --- Auth ---
+
+    def _check_auth(self):
+        """Return True if request is authorized."""
+        if not self.auth_token:
+            return True
+        header = self.headers.get("Authorization", "")
+        return header == f"Bearer {self.auth_token}"
 
     # --- Helpers ---
 
@@ -421,15 +441,28 @@ class ConfigHandler(BaseHTTPRequestHandler):
 
     def do_GET(self):  # noqa: N802
         if self.path == "/":
-            self._send_html(HTML_PAGE)
-        elif self.path == "/api/config":
-            self._handle_get_config()
-        elif self.path == "/api/config/path":
-            self._send_json({"path": self.config_path})
+            # The HTML page embeds the token — serve it without auth check
+            # so the browser can bootstrap. The token in the page enables
+            # subsequent API calls.
+            page = HTML_PAGE.replace("__SUPERMD_AUTH_TOKEN__", self.auth_token)
+            self._send_html(page)
+        elif self.path.startswith("/api/"):
+            if not self._check_auth():
+                self._send_json({"error": "Unauthorized"}, 401)
+                return
+            if self.path == "/api/config":
+                self._handle_get_config()
+            elif self.path == "/api/config/path":
+                self._send_json({"path": self.config_path})
+            else:
+                self.send_error(404)
         else:
             self.send_error(404)
 
     def do_POST(self):  # noqa: N802
+        if not self._check_auth():
+            self._send_json({"error": "Unauthorized"}, 401)
+            return
         if self.path == "/api/config":
             self._handle_post_config()
         else:
@@ -499,16 +532,34 @@ class ConfigHandler(BaseHTTPRequestHandler):
 # Server entry point
 # ---------------------------------------------------------------------------
 
-def start_server(config_path: str, port: int = 8734):
+def start_server(
+    config_path: str,
+    port: int = 8734,
+    host: str = "127.0.0.1",
+    token: str | None = None,
+):
     """Start the configuration GUI HTTP server."""
     ConfigHandler.config_path = os.path.abspath(config_path)
-    server = HTTPServer(("127.0.0.1", port), ConfigHandler)
-    url = f"http://localhost:{port}"
+
+    # Auto-generate a token when binding to a non-localhost address
+    is_local = host in ("127.0.0.1", "localhost", "::1")
+    if token is not None:
+        ConfigHandler.auth_token = token
+    elif not is_local:
+        ConfigHandler.auth_token = secrets.token_urlsafe(32)
+    else:
+        ConfigHandler.auth_token = ""
+
+    server = HTTPServer((host, port), ConfigHandler)
+    url = f"http://{host}:{port}"
     print(f"SuperMD GUI running at {url}")
     print(f"Editing: {ConfigHandler.config_path}")
+    if ConfigHandler.auth_token:
+        print(f"Auth token: {ConfigHandler.auth_token}")
     print("Press Ctrl+C to stop")
     try:
-        webbrowser.open(url)
+        if is_local:
+            webbrowser.open(f"http://localhost:{port}")
         server.serve_forever()
     except KeyboardInterrupt:
         print("\nShutting down GUI server")
