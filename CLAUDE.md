@@ -31,6 +31,11 @@ supermd run --config config/supermd.yaml
 supermd watch --config config/supermd.yaml
 supermd meta list
 supermd meta rebuild
+
+# Configuration GUI
+supermd gui --config config/supermd.yaml              # local only (localhost:8734)
+supermd gui --host 0.0.0.0 --port 8734                # remote access (auto-generates auth token)
+supermd gui --host 0.0.0.0 --token <token>             # explicit token (or set SUPERMD_GUI_TOKEN)
 ```
 
 ## Architecture
@@ -57,7 +62,9 @@ The pipeline flows: CLI → Batches/Watcher → Converter → [Extractor + AI + 
 
 **`console.py`** — Custom logging handler that integrates stdlib logging with styled console output and redirects `tqdm.write` to stdout.
 
-**`cli.py`** — Click-based CLI entry point. Defines all subcommands (`file`, `directory`, `run`, `watch`, `meta`, `config`).
+**`cli.py`** — Click-based CLI entry point. Defines all subcommands (`file`, `directory`, `run`, `watch`, `gui`, `meta`, `config`, `service`).
+
+**`gui.py`** — Web-based configuration editor. Serves an HTML SPA with REST API for reading/writing `supermd.yaml`. Uses `ruamel.yaml` round-trip mode to preserve YAML comments. Supports bearer token auth for remote access (auto-generated when `--host` is not localhost). Token is embedded in the served HTML page via a `<meta>` tag so the JS client can include it in API requests.
 
 **`ai_utils.py`** — LLM interaction helpers. Wraps the `llm` library for page transcription and title generation calls.
 
@@ -90,6 +97,12 @@ docker compose logs -f
 cd docker/stack
 docker compose run --rm setup      # interactive first-time config
 docker compose --profile cloud up -d
+
+# Configuration GUI (either standalone or stack)
+docker compose --profile gui up -d                          # start GUI service
+docker compose --profile gui --profile cloud up -d          # GUI + cloud sync
+docker compose logs supermd-gui | grep "Auth token"         # get the auth token
+# Access at http://<hostname>:8734 (set SUPERMD_GUI_PORT / SUPERMD_GUI_TOKEN in .env)
 ```
 
 ## Docker Stack Gotchas

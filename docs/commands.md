@@ -6,7 +6,7 @@ SuperMD is invoked as `supermd [GLOBAL OPTIONS] COMMAND [ARGS]`.
 
 ## Global Options
 
-These options apply to the `file` and `directory` commands. The `run`, `watch`, `meta`, `config`, and `service` commands manage their own options independently.
+These options apply to the `file` and `directory` commands. The `run`, `watch`, `gui`, `meta`, `config`, and `service` commands manage their own options independently.
 
 | Option | Default | Description |
 |---|---|---|
@@ -179,6 +179,41 @@ supermd config keys path
 ```
 
 Print the filesystem path to the `llm` keys JSON file.
+
+---
+
+## gui
+
+Launch a web-based configuration editor for `supermd.yaml`.
+
+```bash
+supermd gui [OPTIONS]
+```
+
+| Option | Default | Description |
+|---|---|---|
+| `-c, --config PATH` | `config/supermd.yaml` | Config file to edit |
+| `-p, --port N` | `8734` | Port for the HTTP server |
+| `-H, --host ADDR` | `127.0.0.1` | Bind address. Use `0.0.0.0` for remote access (e.g. Docker, Tailscale) |
+| `-t, --token TEXT` | *(auto)* | Bearer token for API auth. Also readable from `SUPERMD_GUI_TOKEN` env var. Auto-generated when host is not localhost |
+
+The GUI serves a single-page app at `http://<host>:<port>` with a form for editing all config fields (model, prompts, templates, defaults, jobs). Changes are validated through Pydantic and written back to the YAML file with comments preserved.
+
+**Authentication:** When binding to a non-localhost address, a random bearer token is generated and printed to stdout. All `/api/*` requests require an `Authorization: Bearer <token>` header. The token is embedded in the served HTML page so the browser client authenticates automatically. When running on localhost, no auth is required.
+
+**Examples**
+
+```bash
+# Local editing (opens browser automatically)
+supermd gui
+
+# Remote access (e.g. from Docker or over Tailscale)
+supermd gui --host 0.0.0.0 --port 8734
+# Token is printed to stdout — use it to access from another device
+
+# Explicit token
+supermd gui --host 0.0.0.0 --token my-secret
+```
 
 ---
 

@@ -76,6 +76,8 @@ docker compose --profile cloud up -d
 | Native (watch) | `supermd watch --config config/supermd.yaml` | [docs/getting-started.md](docs/getting-started.md) |
 | Docker standalone | `docker compose up -d` | [docs/running-docker.md](docs/running-docker.md) |
 | Docker full stack | `docker compose --profile cloud up -d` | [docs/docker-stack.md](docs/docker-stack.md) |
+| Config GUI (native) | `supermd gui` | [docs/commands.md](docs/commands.md#gui) |
+| Config GUI (Docker) | `docker compose --profile gui up -d` | [docs/running-docker.md](docs/running-docker.md#configuration-gui) |
 
 ---
 
@@ -177,6 +179,7 @@ Options:
 | `meta list` | List tracked files and their status (`--verbose`) |
 | `meta rebuild` | Rebuild metadata from existing input/output pairs |
 | `meta rm` | Remove all metadata (reset tracking) |
+| `gui` | Launch web-based configuration editor (`--host`, `--port`, `--token`) |
 | `config keys set <name>` | Store an API key in the llm keystore |
 | `config keys list` | Show configured API keys (keystore + environment) |
 | `config keys path` | Show the path to the llm keys file |
@@ -265,6 +268,7 @@ src/supermd/
 ├── ai_utils.py      # LLM integration (llm library)
 ├── metadata_db.py   # SQLite metadata tracking
 ├── config.py        # Unified YAML config loader
+├── gui.py           # Web-based config editor (auth + remote access)
 ├── service.py       # macOS launchd service management
 ├── types.py         # Extractor ABC
 ├── console.py       # Styled console output

@@ -1,7 +1,7 @@
 import os
 from pathlib import Path
 
-import yaml
+from ruamel.yaml import YAML
 from pydantic import BaseModel, Field
 
 
@@ -134,8 +134,9 @@ def _expand_strings(data):
 
 def load_config(path: str | Path) -> SuperMDConfig:
     """Load a unified SuperMD YAML config file."""
+    _yaml = YAML()
     with open(path, "r", encoding="utf-8") as f:
-        data = yaml.safe_load(f) or {}
+        data = _yaml.load(f) or {}
 
     data = _expand_strings(data)
     return SuperMDConfig(**data)

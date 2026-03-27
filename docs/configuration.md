@@ -219,3 +219,26 @@ API keys can be supplied as environment variables instead of using the `llm` key
 `SUPERMD_WATCH_DELAY` sets the default debounce delay for `supermd watch` (seconds, float).
 
 Environment variables take precedence over the `llm` keystore for API keys.
+
+### GUI variables
+
+| Variable | Default | Description |
+|---|---|---|
+| `SUPERMD_GUI_TOKEN` | *(auto-generated)* | Bearer token for GUI API authentication. If unset and the GUI binds to a non-localhost address, a random token is generated and printed to stdout |
+| `SUPERMD_GUI_PORT` | `8734` | Host port mapping for the Docker GUI service |
+
+---
+
+## Web GUI
+
+SuperMD includes a browser-based configuration editor. See [commands.md — gui](commands.md#gui) for CLI usage.
+
+```bash
+# Local
+supermd gui
+
+# Remote (Docker / Tailscale)
+supermd gui --host 0.0.0.0
+```
+
+The GUI reads and writes the same `supermd.yaml` file. YAML comments are preserved on save. All changes are validated through Pydantic before writing.

@@ -80,6 +80,20 @@ The `obsidian-sync` service uses the official [obsidian-headless](https://github
 - The `OBSIDIAN_AUTH_TOKEN` environment variable is not well documented. If available, it bypasses the keyring entirely.
 - If automated login fails, users can log in interactively via `docker compose exec obsidian-sync ob login`.
 
+## Configuration GUI
+
+The stack includes an optional `supermd-gui` service behind the `gui` profile. It serves a web-based configuration editor accessible over your network (e.g. Tailscale).
+
+```bash
+# Start the GUI alongside the stack
+docker compose --profile gui --profile cloud up -d
+
+# Get the auto-generated auth token
+docker compose logs supermd-gui | grep "Auth token"
+```
+
+Access at `http://<hostname>:8734`. Set `SUPERMD_GUI_PORT` and/or `SUPERMD_GUI_TOKEN` in `.env` to customise.
+
 ## Quick Reference
 
 ```bash
@@ -88,6 +102,12 @@ docker compose --profile cloud up -d
 
 # Start without Supernote Cloud (NAS mount)
 docker compose up -d
+
+# Start with configuration GUI
+docker compose --profile gui up -d
+
+# Start with both GUI and cloud sync
+docker compose --profile gui --profile cloud up -d
 
 # View logs
 docker compose logs -f

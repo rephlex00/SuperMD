@@ -177,6 +177,22 @@ def watch(config, jobs, delay):
     from .watcher import run_watcher
     run_watcher(config, parallelism=jobs, delay=delay)
 
+@cli.command()
+@click.option("--config", "-c", default="config/supermd.yaml", help="Path to supermd.yaml config file")
+@click.option("--port", "-p", default=8734, type=int, help="Port for the GUI server (default: 8734)")
+@click.option("--host", "-H", default="127.0.0.1", help="Bind address (use 0.0.0.0 for remote access)")
+@click.option("--token", "-t", default=None, envvar="SUPERMD_GUI_TOKEN", help="Auth token (auto-generated when host is not localhost)")
+def gui(config, port, host, token):
+    """Launch web-based configuration editor.
+
+    Opens a browser with a form-based GUI for editing the SuperMD YAML
+    config file. When binding to a non-localhost address, a bearer token
+    is required for API access (auto-generated if not provided).
+    """
+    from .gui import start_server
+    start_server(config, port, host=host, token=token)
+
+
 @cli.group()
 def meta():
     """Manage metadata"""
