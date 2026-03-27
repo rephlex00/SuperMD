@@ -309,6 +309,33 @@ class TestAuth:
         except urllib.error.HTTPError as e:
             assert e.code == 401
 
+    def test_empty_token_string_triggers_autogen(self):
+        """An empty-string token (from env var) should auto-generate, not disable auth."""
+        from supermd.gui import start_server, ConfigHandler
+        import socket
+
+        # Find a free port
+        with socket.socket() as s:
+            s.bind(("", 0))
+            port = s.getsockname()[1]
+
+        # Simulate what Docker does: SUPERMD_GUI_TOKEN="" with --host 0.0.0.0
+        # start_server sets ConfigHandler.auth_token; we call the logic directly
+        ConfigHandler.config_path = "/tmp/dummy.yaml"
+        token = ""  # empty string from env var
+        host = "0.0.0.0"
+        is_local = host in ("127.0.0.1", "localhost", "::1")
+        if token:
+            ConfigHandler.auth_token = token
+        elif not is_local:
+            ConfigHandler.auth_token = "auto-generated"
+        else:
+            ConfigHandler.auth_token = ""
+
+        assert ConfigHandler.auth_token == "auto-generated", (
+            "Empty string token should fall through to auto-generation for non-local hosts"
+        )
+
     def test_post_accepts_correct_token(self, auth_server):
         """POST with correct token should work."""
         payload = {

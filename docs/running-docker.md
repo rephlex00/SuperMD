@@ -139,10 +139,11 @@ docker compose --profile gui up -d
 docker compose logs supermd-gui | grep "Auth token"
 ```
 
-Access at `http://<hostname>:8734`. The auth token is required for all API requests and is embedded in the page automatically.
+Access at `http://<hostname>:8734`. The browser will prompt for the auth token on first load.
 
 | Variable | Default | Description |
 |---|---|---|
+| `SUPERMD_GUI_HOST` | `0.0.0.0` | Bind address inside the container |
 | `SUPERMD_GUI_PORT` | `8734` | Host port for the GUI |
 | `SUPERMD_GUI_TOKEN` | *(auto)* | Fixed auth token (random if unset) |
 
