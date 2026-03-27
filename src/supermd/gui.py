@@ -75,13 +75,73 @@ HTML_PAGE = r"""<!DOCTYPE html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="auth-token" content="__SUPERMD_AUTH_TOKEN__">
 <title>SuperMD Configuration</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
 <style>
 :root {
   --pico-font-size: 93.75%;
 }
+
+/* ── Light theme: solarized purple ── */
+[data-theme="light"] {
+  --pico-primary: #6c3483;
+  --pico-primary-hover: #512e6a;
+  --pico-primary-focus: rgba(108, 52, 131, .2);
+  --pico-primary-inverse: #fff;
+  --pico-background-color: #fdf6ff;
+  --pico-card-background-color: #f5ecf8;
+  --pico-card-sectioning-background-color: #efe4f3;
+  --pico-muted-color: #7c6b85;
+  --pico-muted-border-color: #d8c6e0;
+  --pico-color: #2d1b38;
+  --pico-h1-color: #4a1a6b;
+  --pico-h2-color: #5b2d7a;
+  --pico-h3-color: #6c3483;
+  --pico-form-element-background-color: #fff;
+  --pico-form-element-color: #2d1b38;
+  --pico-form-element-border-color: #c9a8d8;
+  --pico-form-element-focus-color: #6c3483;
+  --pico-switch-color: #d8c6e0;
+  --pico-switch-checked-background-color: #6c3483;
+  --pico-secondary: #8e5ea2;
+  --pico-secondary-hover: #7a4d8e;
+  --pico-ins-color: #5a8a5e;
+  --pico-del-color: #b34040;
+  --pico-mark-background-color: #e8d0f0;
+  --pico-mark-color: #4a1a6b;
+}
+
+/* ── Dark theme: deep near-black purple ── */
+[data-theme="dark"] {
+  --pico-primary: #b48ece;
+  --pico-primary-hover: #c9a8e0;
+  --pico-primary-focus: rgba(180, 142, 206, .25);
+  --pico-primary-inverse: #110b18;
+  --pico-background-color: #0e0812;
+  --pico-card-background-color: #170f1f;
+  --pico-card-sectioning-background-color: #1e1429;
+  --pico-muted-color: #8a7399;
+  --pico-muted-border-color: #2e2240;
+  --pico-color: #ddd0e8;
+  --pico-h1-color: #d4b8e8;
+  --pico-h2-color: #c9a8de;
+  --pico-h3-color: #b48ece;
+  --pico-form-element-background-color: #150e1c;
+  --pico-form-element-color: #ddd0e8;
+  --pico-form-element-border-color: #3a2a50;
+  --pico-form-element-focus-color: #b48ece;
+  --pico-switch-color: #3a2a50;
+  --pico-switch-checked-background-color: #9a6fbf;
+  --pico-secondary: #9a6fbf;
+  --pico-secondary-hover: #b48ece;
+  --pico-ins-color: #7acc80;
+  --pico-del-color: #e06060;
+  --pico-mark-background-color: #2e1a42;
+  --pico-mark-color: #d4b8e8;
+  --pico-table-border-color: #2e2240;
+  --pico-code-background-color: #1a1024;
+}
+
 body { padding-bottom: 4rem; }
 header.container { display: flex; align-items: center; justify-content: space-between; }
 header h1 { margin: 0; font-size: 1.6rem; }
@@ -109,7 +169,46 @@ textarea { font-family: monospace; font-size: .85rem; min-height: 6rem; }
 #status.err { color: var(--pico-del-color); }
 details summary { cursor: pointer; font-size: .9rem; color: var(--pico-muted-color); }
 .override-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 1.5rem; }
-.theme-toggle { background: none; border: none; cursor: pointer; font-size: 1.3rem; padding: .25rem; }
+.theme-toggle {
+  background: none; border: 1px solid var(--pico-muted-border-color);
+  cursor: pointer; font-size: .85rem; padding: .3rem .7rem;
+  border-radius: 4px; color: var(--pico-muted-color);
+}
+.theme-toggle:hover { border-color: var(--pico-primary); color: var(--pico-primary); }
+#login-overlay {
+  display: none; position: fixed; inset: 0; z-index: 200;
+  background: var(--pico-background-color);
+  justify-content: center; align-items: center;
+}
+#login-overlay.active { display: flex; }
+#login-box { width: 100%; max-width: 24rem; padding: 2rem; }
+#login-box h2 { margin-top: 0; }
+#login-error { color: var(--pico-del-color); font-size: .85rem; min-height: 1.2em; }
+.hint {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 1.1rem; height: 1.1rem; border-radius: 50%;
+  background: var(--pico-muted-border-color); color: var(--pico-color);
+  font-size: .7rem; font-weight: 700; cursor: help;
+  position: relative; vertical-align: middle; margin-left: .35rem;
+  line-height: 1; user-select: none; flex-shrink: 0;
+}
+.hint:hover { background: var(--pico-primary); color: var(--pico-primary-inverse); }
+.hint::after {
+  content: attr(data-tip);
+  position: absolute; bottom: calc(100% + .5rem); left: 50%;
+  transform: translateX(-50%);
+  background: var(--pico-card-background-color);
+  color: var(--pico-color);
+  border: 1px solid var(--pico-muted-border-color);
+  border-radius: 6px; padding: .5rem .75rem;
+  font-size: .78rem; font-weight: 400; line-height: 1.4;
+  width: max-content; max-width: 22rem;
+  white-space: normal; text-align: left;
+  pointer-events: none; opacity: 0;
+  transition: opacity .15s;
+  z-index: 50; box-shadow: 0 2px 8px rgba(0,0,0,.15);
+}
+.hint:hover::after { opacity: 1; }
 </style>
 </head>
 <body>
@@ -118,44 +217,44 @@ details summary { cursor: pointer; font-size: .9rem; color: var(--pico-muted-col
     <h1>SuperMD Configuration</h1>
     <p id="config-path">Loading…</p>
   </div>
-  <button class="theme-toggle" onclick="toggleTheme()" title="Toggle dark mode">🌓</button>
+  <button class="theme-toggle" id="theme-btn" onclick="toggleTheme()" title="Toggle dark mode"></button>
 </header>
 
 <main class="container">
 
   <!-- AI Settings -->
   <h2 class="section-title">AI Settings</h2>
-  <label>Model
+  <label>Model <span class="hint" data-tip="The LLM model used to transcribe each page. Requires the matching llm plugin installed (e.g. llm-gemini for Gemini models). Can be overridden per-job.">?</span>
     <input type="text" id="model" placeholder="gpt-4o-mini">
     <small>LLM model name (e.g. gpt-4o-mini, gemini/gemini-2.5-flash, claude-sonnet-4-6)</small>
   </label>
 
   <!-- Prompts -->
   <h2 class="section-title">Prompts</h2>
-  <label>Transcription Prompt
+  <label>Transcription Prompt <span class="hint" data-tip="Sent to the LLM once per page image. Substitutions: {context} — replaced with the previous page's Markdown output so the model has continuity across multi-page notes.">?</span>
     <textarea id="prompt" rows="12" placeholder="Page transcription prompt…"></textarea>
     <small>Sent per page image. Use {context} for previous-page continuity.</small>
   </label>
-  <label>Title Prompt
+  <label>Title Prompt <span class="hint" data-tip="Prompt used for image-to-title extraction from notebook title annotations. Only applies to .note files that contain title metadata. No substitutions available — the page title image is sent alongside this prompt.">?</span>
     <textarea id="title_prompt" rows="4" placeholder="Title extraction prompt…"></textarea>
     <small>Used for image-to-title extraction.</small>
   </label>
-  <label>Note Title Prompt <mark>optional</mark>
+  <label>Note Title Prompt <mark>optional</mark> <span class="hint" data-tip="If set, a second LLM call runs after all pages are transcribed to derive a short title. Leave empty to disable. Substitutions: {markdown} — the full assembled transcription text. The result is available as {{title}} in output templates.">?</span>
     <textarea id="note_title_prompt" rows="4" placeholder="Leave empty to disable title derivation"></textarea>
     <small>If set, a second LLM call generates a title. Use {markdown} placeholder. Leave empty to disable.</small>
   </label>
 
   <!-- Output Templates -->
   <h2 class="section-title">Output Templates</h2>
-  <label>Output Path Template
+  <label>Output Path Template <span class="hint" data-tip="Jinja2 template for the output subdirectory relative to the job's output path. Variables: {{file_basename}} — input filename without extension, {{title}} — LLM-derived title, {{ctime}} / {{mtime}} — datetime objects. DATE tokens: {{DATE:YYYY}}, {{DATE:MM}}, {{DATE:MMM}}, {{DATE:DD}}, {{DATE:dddd}}, etc. Example: {{DATE:YYYY/MM MMM}} → 2026/03 Mar">?</span>
     <input type="text" id="output_path_template" placeholder="{{file_basename}}">
     <small>Jinja2 template for output subdirectory. Supports {{DATE:format}} tokens.</small>
   </label>
-  <label>Output Filename Template
+  <label>Output Filename Template <span class="hint" data-tip="Jinja2 template for the output filename. Same variables and DATE tokens as Output Path Template. Example: {{DATE:YYMMDD}}-{{file_basename}}.md → 260313-20260313_143000.md">?</span>
     <input type="text" id="output_filename_template" placeholder="{{file_basename}}.md">
     <small>Jinja2 template for output filename.</small>
   </label>
-  <label>Output File Template (Jinja2)
+  <label>Output File Template (Jinja2) <span class="hint" data-tip="Full Jinja2 template for the final .md file. All variables from path/filename templates plus: {{llm_output}} / {{markdown}} — the full transcription, {{images}} — list of page images (each has .name, .rel_path, .abs_path), {{links}} — notebook cross-references (.note only), {{keywords}} — notebook keywords (.note only), {{titles}} — notebook title annotations (.note only). Supports DATE tokens, conditionals, loops, and all Jinja2 syntax.">?</span>
     <textarea id="template" rows="14" placeholder="---\ncreated: {{DATE:YYYY-MM-DD}}\n---\n{{llm_output}}"></textarea>
     <small>Rendered once per input file to produce the final .md output.</small>
   </label>
@@ -163,7 +262,7 @@ details summary { cursor: pointer; font-size: .9rem; color: var(--pico-muted-col
   <!-- Processing Defaults -->
   <h2 class="section-title">Processing Defaults</h2>
   <div class="grid">
-    <label>Log Level
+    <label>Log Level <span class="hint" data-tip="Controls log verbosity. DEBUG shows all internal details, INFO shows conversion progress, WARNING and ERROR show only problems.">?</span>
       <select id="defaults.level">
         <option value="DEBUG">DEBUG</option>
         <option value="INFO">INFO</option>
@@ -171,13 +270,13 @@ details summary { cursor: pointer; font-size: .9rem; color: var(--pico-muted-col
         <option value="ERROR">ERROR</option>
       </select>
     </label>
-    <label>Cooldown (seconds)
+    <label>Cooldown (seconds) <span class="hint" data-tip="Delay between successive LLM calls for pages within a single file. Helps avoid rate-limit errors from the API provider. Set to 0 to disable.">?</span>
       <input type="number" id="defaults.cooldown" step="0.5" min="0" value="5.0">
     </label>
   </div>
   <fieldset>
-    <label><input type="checkbox" id="defaults.force" role="switch"> Force reprocessing</label>
-    <label><input type="checkbox" id="defaults.progress" role="switch" checked> Show progress bar</label>
+    <label><input type="checkbox" id="defaults.force" role="switch"> Force reprocessing <span class="hint" data-tip="When enabled, re-process files even if the input hash is unchanged or the output has been hand-edited. Does not override ignoresnlock protection.">?</span></label>
+    <label><input type="checkbox" id="defaults.progress" role="switch" checked> Show progress bar <span class="hint" data-tip="Show a tqdm progress bar during conversion. Automatically disabled when running multiple jobs in parallel.">?</span></label>
   </fieldset>
 
   <!-- Jobs -->
@@ -193,16 +292,40 @@ details summary { cursor: pointer; font-size: .9rem; color: var(--pico-muted-col
   <span id="status"></span>
 </div>
 
+<div id="login-overlay">
+  <div id="login-box">
+    <h2>SuperMD Configuration</h2>
+    <p>Enter the auth token to continue. The token is printed in the server logs at startup.</p>
+    <label>Auth Token
+      <input type="password" id="login-token" placeholder="Paste token here" autofocus>
+    </label>
+    <p id="login-error"></p>
+    <button id="login-btn" onclick="submitLogin()">Authenticate</button>
+  </div>
+</div>
+
 <script>
 // --- Theme ---
+function _getCookie(name) {
+  const m = document.cookie.match('(?:^|; )' + name + '=([^;]*)');
+  return m ? decodeURIComponent(m[1]) : null;
+}
+function _setCookie(name, val) {
+  document.cookie = name + '=' + encodeURIComponent(val) + ';path=/;max-age=31536000;SameSite=Lax';
+}
+function _applyTheme(theme) {
+  document.documentElement.dataset.theme = theme;
+  const btn = document.getElementById('theme-btn');
+  if (btn) btn.textContent = theme === 'dark' ? 'Light mode' : 'Dark mode';
+}
 function toggleTheme() {
-  const html = document.documentElement;
-  html.dataset.theme = html.dataset.theme === 'dark' ? 'light' : 'dark';
-  localStorage.setItem('theme', html.dataset.theme);
+  const next = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
+  _setCookie('supermd_theme', next);
+  _applyTheme(next);
 }
 (function() {
-  const saved = localStorage.getItem('theme');
-  if (saved) document.documentElement.dataset.theme = saved;
+  const saved = _getCookie('supermd_theme') || 'light';
+  _applyTheme(saved);
 })();
 
 // --- Auto-grow textareas ---
@@ -214,12 +337,44 @@ document.addEventListener('input', e => {
 });
 
 // --- Auth ---
-const _token = document.querySelector('meta[name="auth-token"]')?.content || '';
+function _getToken() { return sessionStorage.getItem('supermd_token') || ''; }
 function _headers(extra) {
   const h = Object.assign({}, extra || {});
-  if (_token) h['Authorization'] = 'Bearer ' + _token;
+  const t = _getToken();
+  if (t) h['Authorization'] = 'Bearer ' + t;
   return h;
 }
+
+function showLogin(msg) {
+  document.getElementById('login-overlay').classList.add('active');
+  document.getElementById('login-error').textContent = msg || '';
+  document.getElementById('login-token').focus();
+}
+
+function hideLogin() {
+  document.getElementById('login-overlay').classList.remove('active');
+  document.getElementById('login-error').textContent = '';
+}
+
+async function submitLogin() {
+  const input = document.getElementById('login-token');
+  const token = input.value.trim();
+  if (!token) { document.getElementById('login-error').textContent = 'Token is required'; return; }
+  sessionStorage.setItem('supermd_token', token);
+  // Test the token
+  const res = await fetch('/api/config/path', {headers: _headers()});
+  if (res.status === 401) {
+    sessionStorage.removeItem('supermd_token');
+    document.getElementById('login-error').textContent = 'Invalid token';
+    return;
+  }
+  hideLogin();
+  loadConfig();
+}
+
+document.getElementById('login-token').addEventListener('keydown', e => {
+  if (e.key === 'Enter') submitLogin();
+});
 
 // --- Config load/save ---
 async function loadConfig() {
@@ -228,6 +383,9 @@ async function loadConfig() {
       fetch('/api/config', {headers: _headers()}),
       fetch('/api/config/path', {headers: _headers()})
     ]);
+    if (cfgRes.status === 401 || pathRes.status === 401) {
+      showLogin(''); return;
+    }
     const cfg = await cfgRes.json();
     const pathData = await pathRes.json();
     document.getElementById('config-path').textContent = 'Config: ' + pathData.path;
@@ -318,6 +476,7 @@ async function saveConfig() {
       headers: _headers({'Content-Type': 'application/json'}),
       body: JSON.stringify(gatherConfig())
     });
+    if (res.status === 401) { showLogin('Session expired'); return; }
     const data = await res.json();
     if (res.ok) {
       setStatus('Saved successfully', 'ok');
@@ -441,11 +600,7 @@ class ConfigHandler(BaseHTTPRequestHandler):
 
     def do_GET(self):  # noqa: N802
         if self.path == "/":
-            # The HTML page embeds the token — serve it without auth check
-            # so the browser can bootstrap. The token in the page enables
-            # subsequent API calls.
-            page = HTML_PAGE.replace("__SUPERMD_AUTH_TOKEN__", self.auth_token)
-            self._send_html(page)
+            self._send_html(HTML_PAGE)
         elif self.path.startswith("/api/"):
             if not self._check_auth():
                 self._send_json({"error": "Unauthorized"}, 401)

@@ -52,5 +52,6 @@ services:
       - PUID=${PUID:-1000}
       - PGID=${PGID:-1000}
       - SUPERMD_GUI_TOKEN=${SUPERMD_GUI_TOKEN:-}
+      - PYTHONUNBUFFERED=1
     command: ["supermd", "--config", "/config/supermd.yaml", "gui", "--host", "0.0.0.0", "--port", "8734"]
     restart: unless-stopped

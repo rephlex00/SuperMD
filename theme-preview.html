@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SuperMD Theme Preview</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
+<style>
+:root { --pico-font-size: 93.75%; }
+
+/* ── Light theme: solarized purple ── */
+.panel-light {
+  --pico-primary: #6c3483;
+  --pico-primary-hover: #512e6a;
+  --pico-primary-focus: rgba(108, 52, 131, .2);
+  --pico-primary-inverse: #fff;
+  --pico-background-color: #fdf6ff;
+  --pico-card-background-color: #f5ecf8;
+  --pico-card-sectioning-background-color: #efe4f3;
+  --pico-muted-color: #7c6b85;
+  --pico-muted-border-color: #d8c6e0;
+  --pico-color: #2d1b38;
+  --pico-h1-color: #4a1a6b;
+  --pico-h2-color: #5b2d7a;
+  --pico-h3-color: #6c3483;
+  --pico-form-element-background-color: #fff;
+  --pico-form-element-color: #2d1b38;
+  --pico-form-element-border-color: #c9a8d8;
+  --pico-form-element-focus-color: #6c3483;
+  --pico-switch-color: #d8c6e0;
+  --pico-switch-checked-background-color: #6c3483;
+  --pico-secondary: #8e5ea2;
+  --pico-secondary-hover: #7a4d8e;
+  --pico-ins-color: #5a8a5e;
+  --pico-del-color: #b34040;
+  --pico-mark-background-color: #e8d0f0;
+  --pico-mark-color: #4a1a6b;
+  background: #fdf6ff;
+  color: #2d1b38;
+}
+
+/* ── Dark theme: deep near-black purple ── */
+.panel-dark {
+  --pico-primary: #b48ece;
+  --pico-primary-hover: #c9a8e0;
+  --pico-primary-focus: rgba(180, 142, 206, .25);
+  --pico-primary-inverse: #110b18;
+  --pico-background-color: #0e0812;
+  --pico-card-background-color: #170f1f;
+  --pico-card-sectioning-background-color: #1e1429;
+  --pico-muted-color: #8a7399;
+  --pico-muted-border-color: #2e2240;
+  --pico-color: #ddd0e8;
+  --pico-h1-color: #d4b8e8;
+  --pico-h2-color: #c9a8de;
+  --pico-h3-color: #b48ece;
+  --pico-form-element-background-color: #150e1c;
+  --pico-form-element-color: #ddd0e8;
+  --pico-form-element-border-color: #3a2a50;
+  --pico-form-element-focus-color: #b48ece;
+  --pico-switch-color: #3a2a50;
+  --pico-switch-checked-background-color: #9a6fbf;
+  --pico-secondary: #9a6fbf;
+  --pico-secondary-hover: #b48ece;
+  --pico-ins-color: #7acc80;
+  --pico-del-color: #e06060;
+  --pico-mark-background-color: #2e1a42;
+  --pico-mark-color: #d4b8e8;
+  --pico-table-border-color: #2e2240;
+  --pico-code-background-color: #1a1024;
+  background: #0e0812;
+  color: #ddd0e8;
+}
+
+body { margin: 0; }
+.split { display: grid; grid-template-columns: 1fr 1fr; min-height: 100vh; }
+.panel { padding: 2rem; }
+.panel h1 { font-size: 1.6rem; color: var(--pico-h1-color); }
+.panel h2 { font-size: 1.2rem; color: var(--pico-h2-color); margin-top: 1.5rem; margin-bottom: .5rem; border-bottom: 2px solid var(--pico-primary); padding-bottom: .25rem; }
+.panel label { display: block; margin-bottom: .5rem; color: var(--pico-color); }
+.panel small { color: var(--pico-muted-color); }
+.panel input[type="text"],
+.panel textarea,
+.panel select {
+  width: 100%; padding: .5rem .75rem; border-radius: 4px;
+  border: 1px solid var(--pico-form-element-border-color);
+  background: var(--pico-form-element-background-color);
+  color: var(--pico-form-element-color, var(--pico-color)); font-size: .9rem;
+}
+.panel textarea { font-family: monospace; font-size: .85rem; min-height: 4rem; resize: vertical; }
+.panel input:focus, .panel textarea:focus, .panel select:focus {
+  outline: 2px solid var(--pico-form-element-focus-color);
+  outline-offset: 1px;
+}
+.panel button.primary {
+  background: var(--pico-primary); color: var(--pico-primary-inverse);
+  border: none; padding: .5rem 1.2rem; border-radius: 4px; cursor: pointer; font-size: .9rem;
+}
+.panel button.primary:hover { background: var(--pico-primary-hover); }
+.panel button.secondary {
+  background: transparent; color: var(--pico-secondary);
+  border: 1px solid var(--pico-secondary); padding: .5rem 1.2rem; border-radius: 4px; cursor: pointer; font-size: .9rem;
+}
+.panel button.secondary:hover { color: var(--pico-secondary-hover); border-color: var(--pico-secondary-hover); }
+.panel article {
+  background: var(--pico-card-background-color);
+  border: 1px solid var(--pico-muted-border-color);
+  border-radius: 8px; padding: 1rem; margin-bottom: 1rem;
+}
+.panel .remove-btn {
+  background: var(--pico-del-color); color: #fff; border: none;
+  border-radius: 4px; padding: .2rem .5rem; cursor: pointer; font-size: .75rem; float: right;
+}
+.panel mark { background: var(--pico-mark-background-color); color: var(--pico-mark-color); padding: .1rem .4rem; border-radius: 3px; }
+.panel .status-ok { color: var(--pico-ins-color); font-size: .85rem; }
+.panel .status-err { color: var(--pico-del-color); font-size: .85rem; }
+.switch-row { display: flex; align-items: center; gap: .5rem; margin: .5rem 0; }
+.switch-row input[type="checkbox"] { accent-color: var(--pico-switch-checked-background-color); width: 1.2rem; height: 1.2rem; }
+.btn-bar { display: flex; gap: .75rem; align-items: center; margin-top: 1.5rem; padding-top: .75rem; border-top: 1px solid var(--pico-muted-border-color); }
+.theme-label { text-align: center; font-size: .75rem; color: var(--pico-muted-color); margin-bottom: .5rem; text-transform: uppercase; letter-spacing: .1em; }
+.hint {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 1.1rem; height: 1.1rem; border-radius: 50%;
+  background: var(--pico-muted-border-color); color: var(--pico-color);
+  font-size: .7rem; font-weight: 700; cursor: help;
+  position: relative; vertical-align: middle; margin-left: .35rem;
+  line-height: 1; user-select: none; flex-shrink: 0;
+}
+.hint:hover { background: var(--pico-primary); color: var(--pico-primary-inverse); }
+.hint::after {
+  content: attr(data-tip);
+  position: absolute; bottom: calc(100% + .5rem); left: 50%;
+  transform: translateX(-50%);
+  background: var(--pico-card-background-color);
+  color: var(--pico-color);
+  border: 1px solid var(--pico-muted-border-color);
+  border-radius: 6px; padding: .5rem .75rem;
+  font-size: .78rem; font-weight: 400; line-height: 1.4;
+  width: max-content; max-width: 22rem;
+  white-space: normal; text-align: left;
+  pointer-events: none; opacity: 0;
+  transition: opacity .15s;
+  z-index: 50; box-shadow: 0 2px 8px rgba(0,0,0,.15);
+}
+.hint:hover::after { opacity: 1; }
+</style>
+</head>
+<body>
+<div class="split">
+
+  <!-- ===== LIGHT ===== -->
+  <div class="panel panel-light">
+    <div class="theme-label">Light Mode</div>
+    <h1>SuperMD Configuration</h1>
+    <p style="font-size:.8rem;color:var(--pico-muted-color);">Config: /config/supermd.yaml</p>
+
+    <h2>AI Settings</h2>
+    <label>Model <span class="hint" data-tip="The LLM model used to transcribe each page. Requires the matching llm plugin installed. Can be overridden per-job.">?</span>
+      <input type="text" value="gpt-4o-mini">
+      <small>LLM model name (e.g. gpt-4o-mini, gemini/gemini-2.5-flash)</small>
+    </label>
+
+    <h2>Prompts</h2>
+    <label>Transcription Prompt <span class="hint" data-tip="Sent to the LLM once per page image. Substitutions: {context} — replaced with the previous page's Markdown output so the model has continuity across multi-page notes.">?</span>
+      <textarea rows="3">Convert the handwritten image to well-formatted Markdown.
+Use {context} for previous-page continuity.</textarea>
+      <small>Sent per page image. Use {context} for previous-page continuity.</small>
+    </label>
+    <label>Note Title Prompt <mark>optional</mark> <span class="hint" data-tip="If set, a second LLM call runs after all pages are transcribed to derive a short title. Leave empty to disable. Substitutions: {markdown} — the full assembled transcription text. The result is available as {{title}} in output templates.">?</span>
+      <textarea rows="2" placeholder="Leave empty to disable title derivation"></textarea>
+    </label>
+
+    <h2>Processing Defaults</h2>
+    <label>Log Level <span class="hint" data-tip="Controls log verbosity. DEBUG shows all internal details, INFO shows conversion progress.">?</span>
+      <select><option>INFO</option><option>DEBUG</option></select>
+    </label>
+    <div class="switch-row"><input type="checkbox" checked> <span>Force reprocessing</span> <span class="hint" data-tip="Re-process files even if the input hash is unchanged or the output has been hand-edited.">?</span></div>
+    <div class="switch-row"><input type="checkbox" checked> <span>Show progress bar</span> <span class="hint" data-tip="Show a tqdm progress bar during conversion. Auto-disabled with parallel jobs.">?</span></div>
+
+    <h2>Jobs</h2>
+    <article>
+      <button class="remove-btn">Remove</button>
+      <label>Job Name <input type="text" value="Personal Notes"></label>
+      <label>Input <input type="text" value="~/Supernote/Note"></label>
+      <label>Output <input type="text" value="~/Vault/Supernote"></label>
+    </article>
+    <button class="secondary">+ Add Job</button>
+
+    <div class="btn-bar">
+      <button class="primary">Save Configuration</button>
+      <button class="secondary">Reload</button>
+      <span class="status-ok">Saved successfully</span>
+    </div>
+  </div>
+
+  <!-- ===== DARK ===== -->
+  <div class="panel panel-dark">
+    <div class="theme-label">Dark Mode</div>
+    <h1>SuperMD Configuration</h1>
+    <p style="font-size:.8rem;color:var(--pico-muted-color);">Config: /config/supermd.yaml</p>
+
+    <h2>AI Settings</h2>
+    <label>Model <span class="hint" data-tip="The LLM model used to transcribe each page. Requires the matching llm plugin installed. Can be overridden per-job.">?</span>
+      <input type="text" value="gpt-4o-mini">
+      <small>LLM model name (e.g. gpt-4o-mini, gemini/gemini-2.5-flash)</small>
+    </label>
+
+    <h2>Prompts</h2>
+    <label>Transcription Prompt <span class="hint" data-tip="Sent to the LLM once per page image. Substitutions: {context} — replaced with the previous page's Markdown output so the model has continuity across multi-page notes.">?</span>
+      <textarea rows="3">Convert the handwritten image to well-formatted Markdown.
+Use {context} for previous-page continuity.</textarea>
+      <small>Sent per page image. Use {context} for previous-page continuity.</small>
+    </label>
+    <label>Note Title Prompt <mark>optional</mark> <span class="hint" data-tip="If set, a second LLM call runs after all pages are transcribed to derive a short title. Leave empty to disable. Substitutions: {markdown} — the full assembled transcription text. The result is available as {{title}} in output templates.">?</span>
+      <textarea rows="2" placeholder="Leave empty to disable title derivation"></textarea>
+    </label>
+
+    <h2>Processing Defaults</h2>
+    <label>Log Level <span class="hint" data-tip="Controls log verbosity. DEBUG shows all internal details, INFO shows conversion progress.">?</span>
+      <select><option>INFO</option><option>DEBUG</option></select>
+    </label>
+    <div class="switch-row"><input type="checkbox" checked> <span>Force reprocessing</span> <span class="hint" data-tip="Re-process files even if the input hash is unchanged or the output has been hand-edited.">?</span></div>
+    <div class="switch-row"><input type="checkbox" checked> <span>Show progress bar</span> <span class="hint" data-tip="Show a tqdm progress bar during conversion. Auto-disabled with parallel jobs.">?</span></div>
+
+    <h2>Jobs</h2>
+    <article>
+      <button class="remove-btn">Remove</button>
+      <label>Job Name <input type="text" value="Personal Notes"></label>
+      <label>Input <input type="text" value="~/Supernote/Note"></label>
+      <label>Output <input type="text" value="~/Vault/Supernote"></label>
+    </article>
+    <button class="secondary">+ Add Job</button>
+
+    <div class="btn-bar">
+      <button class="primary">Save Configuration</button>
+      <button class="secondary">Reload</button>
+      <span class="status-err">Error: validation failed</span>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>
