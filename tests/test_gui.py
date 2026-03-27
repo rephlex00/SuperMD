@@ -288,11 +288,12 @@ class TestAuth:
             assert resp.status == 200
 
     def test_html_page_served_without_token(self, auth_server):
-        """The HTML page itself should be served without auth (it embeds the token)."""
+        """The HTML page should be served without auth and must NOT contain the token."""
         with urllib.request.urlopen(auth_server + "/") as resp:
             assert resp.status == 200
             body = resp.read().decode()
-            assert "test-secret-token" in body
+            assert "SuperMD Configuration" in body
+            assert "test-secret-token" not in body
 
     def test_post_rejects_without_token(self, auth_server):
         """POST should also require auth."""
