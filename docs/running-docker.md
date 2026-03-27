@@ -127,6 +127,27 @@ id -g   # → PGID
 
 ---
 
+## Configuration GUI
+
+The standalone compose file includes an optional `supermd-gui` service behind the `gui` profile. It serves a web-based config editor accessible over your network (e.g. Tailscale).
+
+```bash
+# Start the GUI alongside the main service
+docker compose --profile gui up -d
+
+# Get the auto-generated auth token
+docker compose logs supermd-gui | grep "Auth token"
+```
+
+Access at `http://<hostname>:8734`. The auth token is required for all API requests and is embedded in the page automatically.
+
+| Variable | Default | Description |
+|---|---|---|
+| `SUPERMD_GUI_PORT` | `8734` | Host port for the GUI |
+| `SUPERMD_GUI_TOKEN` | *(auto)* | Fixed auth token (random if unset) |
+
+---
+
 ## Comparison with full stack
 
 | Feature | Standalone | Full Stack |
