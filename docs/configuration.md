@@ -224,6 +224,7 @@ Environment variables take precedence over the `llm` keystore for API keys.
 
 | Variable | Default | Description |
 |---|---|---|
+| `SUPERMD_GUI_HOST` | `127.0.0.1` (`0.0.0.0` in Docker) | Bind address for the GUI server. Set to `0.0.0.0` for remote access |
 | `SUPERMD_GUI_TOKEN` | *(auto-generated)* | Bearer token for GUI API authentication. If unset and the GUI binds to a non-localhost address, a random token is generated and printed to stdout |
 | `SUPERMD_GUI_PORT` | `8734` | Host port mapping for the Docker GUI service |
 

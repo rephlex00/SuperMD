@@ -83,6 +83,7 @@ HTML_PAGE = r"""<!DOCTYPE html>
 }
 
 /* ── Light theme: solarized purple ── */
+:root[data-theme="light"],
 [data-theme="light"] {
   --pico-primary: #6c3483;
   --pico-primary-hover: #512e6a;
@@ -112,6 +113,7 @@ HTML_PAGE = r"""<!DOCTYPE html>
 }
 
 /* ── Dark theme: deep near-black purple ── */
+:root[data-theme="dark"],
 [data-theme="dark"] {
   --pico-primary: #b48ece;
   --pico-primary-hover: #c9a8e0;
@@ -698,7 +700,7 @@ def start_server(
 
     # Auto-generate a token when binding to a non-localhost address
     is_local = host in ("127.0.0.1", "localhost", "::1")
-    if token is not None:
+    if token:  # non-empty explicit token
         ConfigHandler.auth_token = token
     elif not is_local:
         ConfigHandler.auth_token = secrets.token_urlsafe(32)

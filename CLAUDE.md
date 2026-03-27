@@ -64,7 +64,7 @@ The pipeline flows: CLI → Batches/Watcher → Converter → [Extractor + AI + 
 
 **`cli.py`** — Click-based CLI entry point. Defines all subcommands (`file`, `directory`, `run`, `watch`, `gui`, `meta`, `config`, `service`).
 
-**`gui.py`** — Web-based configuration editor. Serves an HTML SPA with REST API for reading/writing `supermd.yaml`. Uses `ruamel.yaml` round-trip mode to preserve YAML comments. Supports bearer token auth for remote access (auto-generated when `--host` is not localhost). Token is embedded in the served HTML page via a `<meta>` tag so the JS client can include it in API requests.
+**`gui.py`** — Web-based configuration editor. Serves an HTML SPA with REST API for reading/writing `supermd.yaml`. Uses `ruamel.yaml` round-trip mode to preserve YAML comments. Supports bearer token auth for remote access (auto-generated when `--host` is not localhost). The HTML page is served without auth; the JS client prompts the user for the token on first 401 response and stores it in `sessionStorage`. PicoCSS v2 with custom purple themes (light/dark toggle via cookie). Host bind address configurable via `SUPERMD_GUI_HOST` env var (defaults to `127.0.0.1` natively, `0.0.0.0` in Docker).
 
 **`ai_utils.py`** — LLM interaction helpers. Wraps the `llm` library for page transcription and title generation calls.
 

@@ -194,12 +194,12 @@ supermd gui [OPTIONS]
 |---|---|---|
 | `-c, --config PATH` | `config/supermd.yaml` | Config file to edit |
 | `-p, --port N` | `8734` | Port for the HTTP server |
-| `-H, --host ADDR` | `127.0.0.1` | Bind address. Use `0.0.0.0` for remote access (e.g. Docker, Tailscale) |
+| `-H, --host ADDR` | `127.0.0.1` | Bind address. Also readable from `SUPERMD_GUI_HOST` env var. Use `0.0.0.0` for remote access (e.g. Docker, Tailscale). Docker defaults to `0.0.0.0` |
 | `-t, --token TEXT` | *(auto)* | Bearer token for API auth. Also readable from `SUPERMD_GUI_TOKEN` env var. Auto-generated when host is not localhost |
 
 The GUI serves a single-page app at `http://<host>:<port>` with a form for editing all config fields (model, prompts, templates, defaults, jobs). Changes are validated through Pydantic and written back to the YAML file with comments preserved.
 
-**Authentication:** When binding to a non-localhost address, a random bearer token is generated and printed to stdout. All `/api/*` requests require an `Authorization: Bearer <token>` header. The token is embedded in the served HTML page so the browser client authenticates automatically. When running on localhost, no auth is required.
+**Authentication:** When binding to a non-localhost address, a random bearer token is generated and printed to stdout. All `/api/*` requests require an `Authorization: Bearer <token>` header. The HTML page is served without auth; on first API call the browser detects a 401 response and prompts the user to enter the token. When running on localhost, no auth is required.
 
 **Examples**
 
