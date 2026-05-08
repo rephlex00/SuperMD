@@ -32,7 +32,14 @@ jobs:
           uv pip install --system -e ./sidecar
           uv pip install --system pytest
       - name: Run sidecar tests
-        run: pytest sidecar/tests/ -v
+        run: pytest sidecar/tests/ -v --ignore=sidecar/tests/test_engine_pipeline.py
+      - name: Run engine-pipeline tests if fixtures present
+        run: |
+          if [ -f sidecar/tests/fixtures/sample.note ]; then
+            pytest sidecar/tests/test_engine_pipeline.py -v
+          else
+            echo "Skipping engine-pipeline tests (no .note fixture)"
+          fi
 
   engine-tests:
     name: Engine — pytest

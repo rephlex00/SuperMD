@@ -9,6 +9,9 @@ let package = Package(
     products: [
         .executable(name: "SuperMD", targets: ["SuperMD"]),
     ],
+    dependencies: [
+        .package(url: "https://github.com/pointfreeco/swift-snapshot-testing", from: "1.17.0"),
+    ],
     targets: [
         .executableTarget(
             name: "SuperMD",
@@ -22,8 +25,15 @@ let package = Package(
         ),
         .testTarget(
             name: "SuperMDTests",
-            dependencies: ["SuperMD"],
-            path: "Tests/SuperMDTests"
+            dependencies: [
+                "SuperMD",
+                .product(name: "SnapshotTesting", package: "swift-snapshot-testing"),
+            ],
+            path: "Tests/SuperMDTests",
+            resources: [
+                .copy("__Snapshots__"),
+            ]
         ),
     ]
 )
+
