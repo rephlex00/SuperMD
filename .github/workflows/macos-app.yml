@@ -1,0 +1,62 @@
+name: macOS App CI
+
+on:
+  push:
+    branches: [claude/macos-app-llm-support-9Pn10, main]
+    paths:
+      - 'app/**'
+      - 'sidecar/**'
+      - 'src/supermd/**'
+      - '.github/workflows/macos-app.yml'
+  pull_request:
+    paths:
+      - 'app/**'
+      - 'sidecar/**'
+      - 'src/supermd/**'
+      - '.github/workflows/macos-app.yml'
+
+jobs:
+  sidecar-tests:
+    name: Sidecar — pytest
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install uv
+        run: curl -LsSf https://astral.sh/uv/install.sh | sh
+      - name: Install engine + sidecar
+        run: |
+          uv pip install --system -e .
+          uv pip install --system -e ./sidecar
+          uv pip install --system pytest
+      - name: Run sidecar tests
+        run: pytest sidecar/tests/ -v
+
+  engine-tests:
+    name: Engine — pytest
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install uv
+        run: curl -LsSf https://astral.sh/uv/install.sh | sh
+      - name: Install
+        run: |
+          uv sync --extra test
+      - name: Run engine tests
+        run: uv run pytest tests/ -v
+
+  app-tests:
+    name: SwiftUI app — swift test
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - name: Show Xcode version
+        run: xcodebuild -version
+      - name: Build & test (SwiftPM)
+        working-directory: app
+        run: swift test --parallel

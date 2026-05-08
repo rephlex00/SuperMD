@@ -4,6 +4,77 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
+This branch (`claude/macos-app-llm-support-9Pn10`) is the **macOS app fork**
+of SuperMD. It pairs a native SwiftUI app (`app/`) with a Python sidecar
+(`sidecar/`) that wraps the existing conversion engine (`src/supermd/`).
+
+The app talks to the sidecar over **JSON-RPC 2.0 stdio** (one JSON object per
+newline-terminated line). Long-running tasks (conversion, cloud sync) start
+synchronously but stream progress as server-initiated *notifications*. See
+`sidecar/PROTOCOL.md` for the wire format.
+
+The **CLI form below still works** — the engine is unchanged; the macOS app
+is layered on top.
+
+## macOS app — quick commands
+
+```bash
+make dev              # run app in dev mode (sidecar via python -m)
+make sidecar          # PyInstaller -> dist/macos/supermd-sidecar
+make app              # build dist/macos/SuperMD.app
+make dmg              # wrap into a DMG installer
+make test             # all suites: engine + sidecar + Swift
+make test-sidecar     # pytest sidecar/tests/
+make test-app         # swift test (in app/)
+```
+
+When editing the Swift app, prefer opening `app/Package.swift` in Xcode 15+.
+The app's Info.plist lives at `app/Sources/SuperMD/Resources/Info.plist`.
+
+## macOS app architecture rules
+
+- **Single source of truth for settings.** `app/Sources/SuperMD/Models/AppSettings.swift`
+  is what the UI binds to. Anything that needs to be persisted goes through
+  `AppSettings.save()` (UserDefaults) or — for the on-disk YAML the engine
+  reads — through the `config.write` RPC.
+- **Secrets never go to UserDefaults or the YAML.** API keys and Supernote
+  Cloud passwords live in macOS Keychain (`com.supermd.app` service) via the
+  `keyring` library on the sidecar side. The app calls `llm.set_key` and
+  `cloud.login`; the sidecar persists.
+- **Long-running work goes through notifications, not blocking RPCs.** A
+  conversion request returns a `task_id` immediately; progress + completion
+  arrive as `convert.started` / `convert.page` / `convert.finished`
+  notifications. Same pattern for `cloud.sync_progress`.
+- **The OTP flow is the canonical "blocking RPC + side-channel notification"
+  pattern.** When `cloud.login` hits an E1760, the sidecar emits
+  `cloud.otp_required` and parks the handler thread on
+  `state.request_otp()` until the host calls `cloud.submit_otp`. Don't break
+  this — it's how the SwiftUI sheet works.
+- **Engine code stays in `src/supermd/`.** Sidecar handlers must not duplicate
+  conversion logic — they wrap `supermd.converter.convert_file` etc. If a
+  feature needs new engine code, add it in `src/supermd/` and re-export.
+
+## Sidecar testing
+
+`sidecar/tests/conftest.py` provides a `harness` fixture that runs the RPC
+server with in-memory stdio. Tests drive it synchronously:
+
+```python
+def test_thing(harness, stub_sncloud):
+    resp = harness.call("cloud.login", {"email": "...", "password": "..."})
+    assert resp["result"]["ok"] is True
+```
+
+`stub_sncloud` is a fake `sncloud` module that lets you exercise the OTP
+threading without hitting Supernote Cloud. `fake_obsidian_registry` writes a
+fake `obsidian.json` to a tmp path. See `sidecar/tests/` for examples.
+
+When you add a new RPC method, add a test that exercises it through the
+harness — that's how we verify the dispatch wiring, not just the handler
+function.
+
+## Original SuperMD CLI (still supported)
+
 SuperMD converts Supernote handwritten notes (`.note`, `.spd`, PDF, PNG) into Markdown via LLM transcription. It integrates with Obsidian vaults and supports batch processing, file watching, a macOS launchd service, and Docker deployment (standalone container or full 3-service stack).
 
 ## Commands

@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "supermd-sidecar"
+version = "0.1.0"
+description = "JSON-RPC bridge between SuperMD.app (SwiftUI) and the supermd Python engine"
+requires-python = ">=3.11"
+license = { text = "Apache-2.0" }
+dependencies = [
+    "supermd",
+    "sncloud @ git+https://github.com/rnbennett/sncloud@main",
+    "keyring",
+    "platformdirs",
+]
+
+[project.optional-dependencies]
+test = ["pytest"]
+build = ["pyinstaller>=6.5"]
+
+[project.scripts]
+supermd-sidecar = "supermd_sidecar.__main__:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
