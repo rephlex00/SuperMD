@@ -5,6 +5,7 @@ config path, and a reference to the RPC emitter so handlers can push events.
 from __future__ import annotations
 
 import logging
+import os
 import threading
 import uuid
 from dataclasses import dataclass, field
@@ -41,7 +42,12 @@ class SidecarState:
     APP_DIR = "SuperMD"
 
     def __init__(self):
-        self.config_dir: Path = user_config_path(self.APP_DIR, ensure_exists=True)
+        override = os.environ.get("SUPERMD_CONFIG_DIR")
+        if override:
+            self.config_dir = Path(override)
+            self.config_dir.mkdir(parents=True, exist_ok=True)
+        else:
+            self.config_dir = user_config_path(self.APP_DIR, ensure_exists=True)
         self.log_dir: Path = user_log_path(self.APP_DIR, ensure_exists=True)
         self.config_path: Path = self.config_dir / "config.yaml"
         self.metadata_db: Path = self.config_dir / "metadata.sqlite"

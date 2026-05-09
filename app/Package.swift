@@ -16,9 +16,6 @@ let package = Package(
         .executableTarget(
             name: "SuperMD",
             path: "Sources/SuperMD",
-            resources: [
-                .process("Resources"),
-            ],
             swiftSettings: [
                 .enableExperimentalFeature("StrictConcurrency"),
             ]

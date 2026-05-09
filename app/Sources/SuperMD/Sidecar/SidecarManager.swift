@@ -40,12 +40,18 @@ final class SidecarManager {
         if let bundled, FileManager.default.isExecutableFile(atPath: bundled.path) {
             process.executableURL = bundled
         } else {
-            // Dev fallback: run via uv from the repo root.
-            process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
-            process.arguments = ["python3", "-m", "supermd_sidecar"]
-            // PYTHONPATH so the sidecar can find its package without install
-            var env = ProcessInfo.processInfo.environment
+            // Dev fallback: prefer the project's uv-managed venv if present, else
+            // fall back to the system python3 with PYTHONPATH set.
             let repoRoot = Self.devRepoRoot()
+            let venvPython = repoRoot.appendingPathComponent(".venv/bin/python3")
+            if FileManager.default.isExecutableFile(atPath: venvPython.path) {
+                process.executableURL = venvPython
+                process.arguments = ["-m", "supermd_sidecar"]
+            } else {
+                process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+                process.arguments = ["python3", "-m", "supermd_sidecar"]
+            }
+            var env = ProcessInfo.processInfo.environment
             env["PYTHONPATH"] = [
                 repoRoot.appendingPathComponent("sidecar/src").path,
                 repoRoot.appendingPathComponent("src").path,
@@ -149,15 +155,27 @@ final class SidecarManager {
     }
 
     private static func devRepoRoot() -> URL {
-        // Walk up from the executable until we find Package.swift.
+        // Allow an explicit override (set by dev launchers / make dev).
+        if let override = ProcessInfo.processInfo.environment["SUPERMD_REPO_ROOT"] {
+            return URL(fileURLWithPath: override)
+        }
+        let fm = FileManager.default
+        // Walk up from the executable looking for a sentinel that uniquely
+        // identifies the project root: either `app/Package.swift` (running
+        // from a bundled .app or copy outside the build tree) or `Package.swift`
+        // alongside an `Sources/SuperMD/` (running from inside `app/.build/`).
         var dir = URL(fileURLWithPath: CommandLine.arguments[0]).deletingLastPathComponent()
-        for _ in 0..<8 {
-            if FileManager.default.fileExists(atPath: dir.appendingPathComponent("Package.swift").path) {
-                return dir.deletingLastPathComponent()  // sibling of app/
+        for _ in 0..<10 {
+            if fm.fileExists(atPath: dir.appendingPathComponent("app/Package.swift").path) {
+                return dir
+            }
+            if fm.fileExists(atPath: dir.appendingPathComponent("Package.swift").path)
+                && fm.fileExists(atPath: dir.appendingPathComponent("Sources/SuperMD").path) {
+                return dir.deletingLastPathComponent()
             }
             dir.deleteLastPathComponent()
         }
-        return URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+        return URL(fileURLWithPath: fm.currentDirectoryPath)
     }
 }
 

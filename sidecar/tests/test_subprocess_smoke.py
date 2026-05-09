@@ -30,6 +30,7 @@ def sidecar_proc(tmp_path):
         str(REPO_ROOT / "src") + os.pathsep +
         env.get("PYTHONPATH", "")
     )
+    env["SUPERMD_CONFIG_DIR"] = str(tmp_path / "config")
     env["XDG_CONFIG_HOME"] = str(tmp_path / "config")
     env["XDG_DATA_HOME"] = str(tmp_path / "data")
     env["XDG_CACHE_HOME"] = str(tmp_path / "cache")

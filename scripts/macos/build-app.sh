@@ -31,7 +31,7 @@ mkdir -p "$APP_BUNDLE/Contents/Resources"
 
 cp "$BIN" "$APP_BUNDLE/Contents/MacOS/SuperMD"
 cp "$DIST/supermd-sidecar" "$APP_BUNDLE/Contents/Resources/supermd-sidecar"
-cp "$APP_SRC/Sources/SuperMD/Resources/Info.plist" "$APP_BUNDLE/Contents/Info.plist"
+cp "$APP_SRC/Resources/Info.plist" "$APP_BUNDLE/Contents/Info.plist"
 
 chmod +x "$APP_BUNDLE/Contents/MacOS/SuperMD"
 chmod +x "$APP_BUNDLE/Contents/Resources/supermd-sidecar"
