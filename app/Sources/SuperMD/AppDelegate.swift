@@ -22,13 +22,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func application(_ sender: NSApplication, openFiles filenames: [String]) {
         FileHandle.standardError.write(Data("[AppDelegate] openFiles \(filenames.count)\n".utf8))
-        AppModel.shared?.handleDroppedFiles(filenames.map(URL.init(fileURLWithPath:)))
+        guard let app = AppModel.shared, app.settings.input.dragAndDropEnabled else {
+            sender.reply(toOpenOrPrint: .cancel)
+            return
+        }
+        app.handleDroppedFiles(filenames.map(URL.init(fileURLWithPath:)))
         sender.reply(toOpenOrPrint: .success)
     }
 
     func application(_ application: NSApplication, open urls: [URL]) {
         FileHandle.standardError.write(Data("[AppDelegate] open(urls) \(urls.count)\n".utf8))
-        AppModel.shared?.handleDroppedFiles(urls)
+        guard let app = AppModel.shared, app.settings.input.dragAndDropEnabled else { return }
+        app.handleDroppedFiles(urls)
     }
 
     @objc func handleOpenURL(_ event: NSAppleEventDescriptor, withReplyEvent reply: NSAppleEventDescriptor) {
