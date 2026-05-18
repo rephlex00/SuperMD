@@ -83,11 +83,17 @@ CI workflow at `.github/workflows/macos-app.yml` runs all three on every push.
 | Component | Status |
 | --------- | ------ |
 | Python engine (existing) | Stable |
-| Sidecar JSON-RPC server  | Scaffolded; passing unit tests |
-| Sidecar handlers (system, llm, obsidian, cloud, convert, config) | Scaffolded; passing unit tests |
-| SwiftUI app shell | Scaffolded; needs UI polish + integration testing on real hardware |
-| Build scripts (sidecar binary, .app, DMG) | Written; not yet exercised in CI |
-| Codesign + notarisation | Wired up; needs an Apple Developer account to verify |
+| Sidecar JSON-RPC server  | Stable — 47/47 unit + integration tests pass |
+| Sidecar handlers (system, llm, obsidian, cloud, convert, config) | Stable — `system.set_log_level`, `convert.cancel`, `convert.page` notifications, output-path-in-`convert.finished` all wired and tested |
+| SwiftUI app shell | Functional end-to-end: drag-and-drop, Settings panel, queue + progress, Skipped/Failed/Done states, Run-again button, sidecar-crash banner, multi-file concurrent dispatch |
+| Build scripts | All three exercised live: `make sidecar` → 56 MB PyInstaller binary; `make app` → 1.6 MB SwiftUI executable + bundled sidecar in `.app`; `make dmg` → 57 MB drag-to-Applications DMG that mounts and installs |
+| Tests | 105/105 Python (engine + sidecar + integration), 30/30 Swift (unit + view snapshots) |
+| Codesign + notarisation | `make app` ad-hoc-signs by default; set `APPLE_TEAM_ID` for Developer ID. Notification framework probes safely on unsigned dev builds (no longer crashes) |
+
+### Known gaps
+- **Cloud OTP flow:** code-complete + tested with `stub_sncloud`, but the live Supernote Cloud round-trip needs real credentials to verify end-to-end.
+- **Per-folder mappings:** removed from Settings UI (was unwired); engine doesn't yet honor per-input output overrides.
+- **Snapshot test baselines:** committed PNGs are machine-specific; re-record with `RECORD_SNAPSHOTS=1 swift test --filter ViewSnapshotTests` on a fresh checkout.
 
 ## Acknowledgements
 

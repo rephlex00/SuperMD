@@ -64,22 +64,23 @@ See `sidecar/PROTOCOL.md` for the full RPC method list.
 
 ## Input modes (how Supernote files arrive)
 
-The user picks any combination of these in **Settings → Input**:
+Configured in **Settings → General**:
 
-1. **Drag-and-drop** (always on). Drop a `.note`, `.spd`, `.pdf`, or `.png`
-   onto the app window or dock icon.
+1. **Drag-and-drop** (default on). Drop a `.note`, `.spd`, `.pdf`, or `.png`
+   onto the app window or dock icon. Toggle to disable.
 2. **Watched Inbox folder.** Defaults to `~/Documents/Supernote Inbox`. Can be
    pointed at iCloud Drive, Dropbox, or AirDrop's Downloads folder. The app
-   uses `FSEvents` (kqueue) to react instantly.
-3. **Supernote Cloud sync** (the marquee feature). The sidecar polls
-   `cloud.supernote.com` over the same `sncloud` library used by the Docker
-   stack. Includes the full E1760 OTP flow surfaced as a SwiftUI sheet.
-4. **Apple Shortcuts action** — installed alongside the app. Adds a "Convert
-   with SuperMD" action to Finder's right-click menu and Shortcuts.app.
+   uses `FSEvents` to react. The watcher is started on a background queue so
+   the first-launch Documents-folder permission prompt doesn't block the main
+   thread / main window.
+3. **Supernote Cloud sync.** The sidecar polls `cloud.supernote.com` via the
+   `sncloud` library used by the Docker stack. The E1760 new-device OTP flow
+   is surfaced as a SwiftUI sheet. Auto-sync toggle in **Settings → Cloud**
+   wires the `cloud.start_sync` / `cloud.stop_sync` RPCs.
 
 ## Output modes (how Markdown lands)
 
-The user picks **one** in **Settings → Obsidian**:
+The user picks **one** in **Settings → Output**:
 
 1. **Pick a vault** *(default).* The app reads the Obsidian-managed
    `~/Library/Application Support/obsidian/obsidian.json` to list local vaults,
@@ -100,21 +101,29 @@ Templates**:
 - Path template     (default `{{DATE:YYYY/MM MMM}}/{{file_basename}}`)
 - Filename template (default `{{file_basename}}.md`)
 - Frontmatter / body template (default ships an Obsidian-friendly frontmatter
-  block with `created`, `tags`, `source: supernote`)
-- Per-job overrides — same `JobDefinition` model the CLI uses.
+  block with `created`, `tags`, `source: supernote`). Can be backed by an
+  external `.md` file (typically in an Obsidian vault's Templates folder)
+  that the engine re-reads on every conversion.
+- Per-page LLM instruction (the prompt sent with each page image).
+- Every editable template field has a `{ }` token-picker menu listing each
+  supported token with a one-line description (categorised: File / Date /
+  Body / Supernote metadata).
 
 ## LLM configuration
 
 **Settings → LLM** has two columns: API providers, and Local (Ollama).
 
-- API: pick a provider, paste a key, pick a model from the live list. Keys are
-  stored in macOS Keychain (not in plain config) and exported to the sidecar
-  as env vars at spawn time.
+- API: pick a provider, paste a key, click **Test & save**. A 1-token probe
+  against the live API confirms the key works *before* it's written to
+  Keychain (service `com.supermd.app`). A green badge shows when a key is
+  stored for the active provider.
 - Local: the app probes `http://localhost:11434/api/tags` and lists installed
-  Ollama models. A "Pull model…" button shells out to `ollama pull`.
+  Ollama models. Ollama runs outside of SuperMD; SuperMD only talks to it.
 
-The user picks one as the **default model**; per-job overrides are still
-allowed in advanced settings.
+The user picks one as the **default model**. Every `convert.file` RPC
+includes the current settings (template, prompt, model, cooldown, optional
+title-generation prompt) so the engine sees the same config it would from
+the YAML.
 
 ## Where settings live
 
@@ -129,6 +138,28 @@ allowed in advanced settings.
 The on-disk YAML is the same shape as the CLI's `supermd.yaml`, so the engine
 can be invoked headlessly with the same file. Power users can edit it
 directly.
+
+## Resilience
+
+A few intentionally-defensive patterns:
+
+- **Sidecar crash detection.** `SidecarManager` installs a
+  `terminationHandler`; on exit it rejects every pending RPC continuation
+  with `SidecarError.notRunning` and notifies the delegate. AppModel flips
+  every queued / running row to `.failed("Sidecar exited")` and surfaces a
+  tinted banner in the main window with a **Restart Sidecar** button.
+- **ObjC-exception bridge.** `UNUserNotificationCenter.current()` aborts the
+  process via `NSInternalInconsistencyException` from unsigned / untrusted
+  bundles. A tiny Obj-C target (`SuperMDObjC`) wraps `@try`/`@catch` so the
+  `Notifier` can probe it once and disable itself instead of crashing.
+- **Nil-stdin RPC errors.** If a `sidecar.client.call(...)` runs against a
+  manager whose stdin is gone (process exited), it throws
+  `SidecarError.notRunning` instead of silently dropping the write.
+- **Settings persistence forwarding.** `AppModel`'s nested
+  `@Published var queue` / `@Published var settings` ObservableObjects
+  forward their `objectWillChange` to the outer model — without this,
+  SwiftUI views observing `AppModel` don't see queue-row updates or
+  Settings-Choose-dialog edits.
 
 ## Distribution
 

@@ -3,9 +3,9 @@
 ## Prerequisites
 
 - macOS 14+ (Sonoma) on Apple Silicon. Intel works but is not a release target.
-- Xcode 15+ (for the SwiftUI app).
+- Xcode 15+ (with `xcode-select -s /Applications/Xcode.app/Contents/Developer` so `swift test` can find XCTest).
 - Python 3.12 + [`uv`](https://github.com/astral-sh/uv).
-- For DMG packaging: `brew install create-dmg`.
+- DMG packaging is done with `hdiutil` (built in); `create-dmg` is no longer required.
 
 ## Layout
 
@@ -59,15 +59,26 @@ Full method list: `sidecar/PROTOCOL.md`.
 ## Building a release
 
 ```bash
-make sidecar     # PyInstaller -> dist/supermd-sidecar (single binary)
+make sidecar     # PyInstaller -> dist/macos/supermd-sidecar (~56 MB single binary)
 make app         # swift build -c release, copies sidecar into Resources/
-make dmg         # create-dmg -> dist/SuperMD-<version>.dmg
-make release     # all of the above + codesign + notarytool submit
+                 #   -> dist/macos/SuperMD.app
+make dmg         # hdiutil -> dist/macos/SuperMD-<version>.dmg (~57 MB)
+make release     # all of the above (sidecar + app + dmg)
 ```
 
-Codesigning requires `APPLE_TEAM_ID` and a Developer ID Application cert in
-the login keychain. Notarisation requires `APPLE_ID`, `APPLE_TEAM_ID`, and an
-app-specific password stored in keychain as `notarytool-password`.
+Setting `APPLE_TEAM_ID` to your Developer ID team makes `build-app.sh`
+codesign the bundle (`codesign --force --deep --options runtime`). Without
+it, the script ad-hoc-signs locally; the resulting bundle runs on your own
+Mac but will be blocked by Gatekeeper on a freshly-downloaded copy.
+
+**Notarisation** is not yet wired into the scripts. To notarise manually:
+
+```bash
+xcrun notarytool submit dist/macos/SuperMD-0.1.0.dmg \
+    --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" \
+    --keychain-profile "notarytool-password" --wait
+xcrun stapler staple dist/macos/SuperMD-0.1.0.dmg
+```
 
 ## Testing
 
@@ -76,8 +87,24 @@ app-specific password stored in keychain as `notarytool-password`.
   requests, mocks the engine.
 - App: `swift test` from the `app/` directory.
 
-There is no end-to-end test bot; manual smoke-testing flow is in
-`docs/macos/SMOKE_TEST.md`.
+The repo also ships `scripts/e2e_probe.py` — spawns the real sidecar as a
+subprocess, drops a real `.note` through `convert.file` with the LLM stubbed,
+and asserts `convert.started → convert.page → convert.finished` arrives over
+real stdio framing. Run it after touching any RPC handler:
+
+```bash
+.venv/bin/python scripts/e2e_probe.py
+```
+
+For headless GUI testing, the app honors these env vars at launch:
+
+| Var                              | Effect                                                 |
+| -------------------------------- | ------------------------------------------------------ |
+| `SUPERMD_REPO_ROOT`              | Pin the repo path the dev sidecar runs from           |
+| `SUPERMD_TEST_OUTPUT=/path`      | Force output mode to folder + path                    |
+| `SUPERMD_TEST_NO_INBOX=1`        | Skip the FSEvents inbox watcher (and its Documents-perms prompt) |
+| `SUPERMD_TEST_DROP=a.note,b.note`| Inject a drop ~2s after launch                        |
+| `SUPERMD_TEST_BODY_TEMPLATE_FILE=/path/template.md` | Pre-set the external body template      |
 
 ## Adding a new RPC method
 
