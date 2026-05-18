@@ -30,6 +30,7 @@ final class AppModel: ObservableObject {
     }
 
     private var didStart = false
+    private var cloudSyncTaskID: String? = nil
     private static var didFireTestDrop = false
 
     /// Tear down the current sidecar (if alive) and start a fresh one. Used
@@ -236,9 +237,35 @@ final class AppModel: ObservableObject {
         do {
             try await sidecar.client.cloudLoginToken(token: token)
             cloudStatus = .signedIn(email: settings.input.cloudEmail ?? "")
+            if settings.input.cloudSyncEnabled {
+                await startCloudSync()
+            }
         } catch {
             cloudStatus = .tokenExpired
         }
+    }
+
+    func startCloudSync() async {
+        guard cloudSyncTaskID == nil,
+              case .signedIn = cloudStatus,
+              let outRoot = settings.output.resolvedRoot else { return }
+        let inbox = settings.input.inboxURL?.path ?? outRoot.path
+        do {
+            cloudSyncTaskID = try await sidecar.client.cloudStartSync(
+                remotePath: settings.input.cloudRemotePath,
+                localPath: inbox,
+                intervalSec: settings.input.cloudIntervalSec
+            )
+        } catch {
+            FileHandle.standardError.write(Data(
+                "[AppModel] cloudStartSync failed: \(error)\n".utf8))
+        }
+    }
+
+    func stopCloudSync() async {
+        guard let taskID = cloudSyncTaskID else { return }
+        cloudSyncTaskID = nil
+        try? await sidecar.client.cloudStopSync(taskID: taskID)
     }
 
     // MARK: - Shutdown

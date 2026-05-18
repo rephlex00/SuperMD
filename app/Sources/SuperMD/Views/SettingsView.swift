@@ -207,6 +207,9 @@ struct CloudSettingsTab: View {
                     Label("Signed in as \(signedEmail)", systemImage: "checkmark.seal.fill")
                         .foregroundStyle(.green)
                     Toggle("Auto-sync", isOn: $app.settings.input.cloudSyncEnabled)
+                        .onChange(of: app.settings.input.cloudSyncEnabled) { _, on in
+                            Task { on ? await app.startCloudSync() : await app.stopCloudSync() }
+                        }
                     TextField("Remote path", text: $app.settings.input.cloudRemotePath)
                     Stepper(value: $app.settings.input.cloudIntervalSec, in: 60...3600, step: 60) {
                         Text("Sync every \(app.settings.input.cloudIntervalSec)s")
