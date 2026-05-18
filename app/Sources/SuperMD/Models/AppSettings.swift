@@ -46,7 +46,7 @@ final class AppSettings: ObservableObject {
         var dict: [String: Any] = [
             "model": llm.defaultModelID,
             "prompt": templates.pageInstruction,
-            "template": templates.bodyTemplate,
+            "template": templates.resolvedBodyTemplate(),
             "output_path_template": templates.pathTemplate,
             "output_filename_template": templates.filenameTemplate,
             "defaults": [
@@ -159,9 +159,21 @@ struct LLMSettings: Codable {
 
 // MARK: - Templates
 
+enum BodyTemplateSource: String, Codable, CaseIterable, Identifiable {
+    case inline = "Inline"
+    case file = "From file"
+    var id: Self { self }
+}
+
 struct TemplateSettings: Codable {
     var pathTemplate: String = "{{DATE:YYYY/MM MMM}}/{{file_basename}}"
     var filenameTemplate: String = "{{file_basename}}.md"
+
+    /// Selects whether `bodyTemplate` (inline) or the file at
+    /// `bodyTemplateFilePath` provides the engine's body template.
+    var bodyTemplateSource: BodyTemplateSource = .inline
+    var bodyTemplateFilePath: String? = nil
+
     var bodyTemplate: String = """
     ---
     created: {{DATE:YYYY-MM-DD}}
@@ -175,6 +187,23 @@ struct TemplateSettings: Codable {
     Convert the image to markdown. Use mermaid for simple diagrams, $$ for math,
     and Obsidian wiki-link syntax where appropriate. Do not wrap text in code blocks.
     """
+
+    /// Pick whichever body template the user has actually configured.
+    /// In file mode we re-read on every call so an Obsidian-side edit of
+    /// the template takes effect on the next conversion without restarting
+    /// SuperMD. If reading fails for any reason, fall back to the inline
+    /// body template so a missing file never produces an empty note.
+    func resolvedBodyTemplate() -> String {
+        guard bodyTemplateSource == .file,
+              let path = bodyTemplateFilePath, !path.isEmpty else {
+            return bodyTemplate
+        }
+        let expanded = (path as NSString).expandingTildeInPath
+        if let data = try? String(contentsOfFile: expanded, encoding: .utf8) {
+            return data
+        }
+        return bodyTemplate
+    }
 }
 
 // MARK: - Advanced

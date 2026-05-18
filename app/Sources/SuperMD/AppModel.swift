@@ -107,6 +107,14 @@ final class AppModel: ObservableObject {
             FileHandle.standardError.write(Data("[AppModel] TEST_OUTPUT override: \(outPath)\n".utf8))
         }
 
+        // Test hook: SUPERMD_TEST_BODY_TEMPLATE_FILE="/path/to/template.md"
+        // points body template at an external file (file-mode).
+        if let p = ProcessInfo.processInfo.environment["SUPERMD_TEST_BODY_TEMPLATE_FILE"], !p.isEmpty {
+            settings.templates.bodyTemplateSource = .file
+            settings.templates.bodyTemplateFilePath = p
+            FileHandle.standardError.write(Data("[AppModel] TEST_BODY_TEMPLATE_FILE override: \(p)\n".utf8))
+        }
+
         // Test hook: SUPERMD_TEST_DROP="/path/a.note,/path/b.note" injects a
         // synthetic drop ~2s after launch so automated tests don't need
         // synthetic mouse events. Once per process lifetime so a sidecar

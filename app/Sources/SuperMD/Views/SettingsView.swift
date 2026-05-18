@@ -465,17 +465,7 @@ struct TemplateSettingsTab: View {
                     .font(.caption).foregroundStyle(.secondary)
             }
 
-            Section {
-                TextEditor(text: $app.settings.templates.bodyTemplate)
-                    .font(.system(.body, design: .monospaced))
-                    .frame(minHeight: 140)
-                Button("Reset to default") {
-                    app.settings.templates.bodyTemplate = TemplateSettings().bodyTemplate
-                }
-            } header: { Text("Body template") } footer: {
-                Text("Jinja2 template wrapped around the model's transcription. Must contain {{llm_output}} somewhere or your notes will be empty.")
-                    .font(.caption).foregroundStyle(.secondary)
-            }
+            BodyTemplateSection()
 
             Section {
                 TextEditor(text: $app.settings.templates.pageInstruction)
@@ -490,6 +480,144 @@ struct TemplateSettingsTab: View {
             }
         }
         .formStyle(.grouped)
+    }
+}
+
+/// Body-template section with two modes: inline (stored in UserDefaults) or
+/// an external Markdown file (typically inside an Obsidian vault's Templates
+/// folder). In file mode we read on appear, give the user Save/Reload, and
+/// the engine re-reads on every convert so Obsidian-side edits take effect.
+private struct BodyTemplateSection: View {
+    @EnvironmentObject var app: AppModel
+    @State private var fileContents: String = ""
+    @State private var fileStatus: FileStatus = .idle
+
+    enum FileStatus: Equatable {
+        case idle
+        case loaded
+        case saved
+        case error(String)
+    }
+
+    var body: some View {
+        Section {
+            Picker("Source", selection: $app.settings.templates.bodyTemplateSource) {
+                ForEach(BodyTemplateSource.allCases) { Text($0.rawValue).tag($0) }
+            }
+            .pickerStyle(.segmented)
+            .onChange(of: app.settings.templates.bodyTemplateSource) { _, new in
+                if new == .file { loadFromFile() }
+            }
+
+            switch app.settings.templates.bodyTemplateSource {
+            case .inline:
+                TextEditor(text: $app.settings.templates.bodyTemplate)
+                    .font(.system(.body, design: .monospaced))
+                    .frame(minHeight: 140)
+                Button("Reset to default") {
+                    app.settings.templates.bodyTemplate = TemplateSettings().bodyTemplate
+                }
+            case .file:
+                HStack {
+                    TextField("Path to Markdown template",
+                              text: Binding(
+                                get: { app.settings.templates.bodyTemplateFilePath ?? "" },
+                                set: { app.settings.templates.bodyTemplateFilePath = $0.isEmpty ? nil : $0 }))
+                    Button("Choose…") { chooseFile() }
+                    Button("Reveal") { revealFile() }
+                        .disabled(app.settings.templates.bodyTemplateFilePath == nil)
+                }
+                TextEditor(text: $fileContents)
+                    .font(.system(.body, design: .monospaced))
+                    .frame(minHeight: 140)
+                    .disabled(app.settings.templates.bodyTemplateFilePath == nil)
+                HStack {
+                    Button("Reload from file") { loadFromFile() }
+                        .disabled(app.settings.templates.bodyTemplateFilePath == nil)
+                    Spacer()
+                    statusBadge
+                    Button("Save to file") { saveToFile() }
+                        .keyboardShortcut("s")
+                        .disabled(app.settings.templates.bodyTemplateFilePath == nil)
+                }
+            }
+        } header: { Text("Body template") } footer: {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Jinja2 template wrapped around the model's transcription. Must contain {{llm_output}} somewhere or your notes will be empty.")
+                if app.settings.templates.bodyTemplateSource == .file {
+                    Text("Tip: point this at a file inside your Obsidian vault's Templates folder so you can edit it in Obsidian too. The file is re-read on every conversion.")
+                }
+            }
+            .font(.caption).foregroundStyle(.secondary)
+        }
+        .onAppear {
+            if app.settings.templates.bodyTemplateSource == .file { loadFromFile() }
+        }
+    }
+
+    @ViewBuilder
+    private var statusBadge: some View {
+        switch fileStatus {
+        case .idle: EmptyView()
+        case .loaded:
+            Label("Loaded", systemImage: "doc.text.fill")
+                .foregroundStyle(.secondary).font(.caption)
+        case .saved:
+            Label("Saved", systemImage: "checkmark.circle.fill")
+                .foregroundStyle(.green).font(.caption)
+        case .error(let s):
+            Label(s, systemImage: "exclamationmark.triangle.fill")
+                .foregroundStyle(.red).font(.caption).lineLimit(1)
+        }
+    }
+
+    private var resolvedPath: String? {
+        guard let p = app.settings.templates.bodyTemplateFilePath, !p.isEmpty else { return nil }
+        return (p as NSString).expandingTildeInPath
+    }
+
+    private func chooseFile() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = true
+        panel.canChooseDirectories = false
+        panel.allowedContentTypes = [.text, .plainText]
+        panel.allowsOtherFileTypes = true  // .md not always registered
+        if let vault = app.settings.output.selectedVaultPath {
+            panel.directoryURL = URL(fileURLWithPath: (vault as NSString).expandingTildeInPath)
+        }
+        if panel.runModal() == .OK, let url = panel.url {
+            app.settings.templates.bodyTemplateFilePath = url.path
+            loadFromFile()
+        }
+    }
+
+    private func revealFile() {
+        guard let path = resolvedPath else { return }
+        NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: path)])
+    }
+
+    private func loadFromFile() {
+        guard let path = resolvedPath else {
+            fileStatus = .error("No file selected")
+            return
+        }
+        do {
+            fileContents = try String(contentsOfFile: path, encoding: .utf8)
+            fileStatus = .loaded
+        } catch {
+            fileContents = ""
+            fileStatus = .error("Couldn't read: \(error.localizedDescription)")
+        }
+    }
+
+    private func saveToFile() {
+        guard let path = resolvedPath else { return }
+        do {
+            try fileContents.write(toFile: path, atomically: true, encoding: .utf8)
+            fileStatus = .saved
+        } catch {
+            fileStatus = .error("Couldn't write: \(error.localizedDescription)")
+        }
     }
 }
 
