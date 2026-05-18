@@ -173,6 +173,10 @@ final class AppModel: ObservableObject {
             NSApp.setActivationPolicy(target)
         }
 
+        // Push the chosen log level to the sidecar.
+        let level = settings.advanced.sidecarLogLevel
+        Task { try? await sidecar.client.setLogLevel(level) }
+
         // Open at login. SMAppService requires macOS 13+; silent on older OS
         // or unsigned dev builds where registration is rejected.
         if #available(macOS 13.0, *) {

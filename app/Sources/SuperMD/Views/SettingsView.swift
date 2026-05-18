@@ -9,8 +9,8 @@ struct SettingsView: View {
                 .tabItem { Label("LLM", systemImage: "brain") }
             CloudSettingsTab()
                 .tabItem { Label("Cloud", systemImage: "icloud") }
-            ObsidianSettingsTab()
-                .tabItem { Label("Obsidian", systemImage: "doc.text") }
+            OutputSettingsTab()
+                .tabItem { Label("Output", systemImage: "doc.text") }
             TemplateSettingsTab()
                 .tabItem { Label("Templates", systemImage: "curlybraces.square") }
             AdvancedSettingsTab()
@@ -27,28 +27,50 @@ struct GeneralSettingsTab: View {
 
     var body: some View {
         Form {
-            Section("Drag-and-drop") {
-                Toggle("Accept files dropped on the app or dock icon",
+            Section {
+                Toggle("Accept files dropped on the window or dock icon",
                        isOn: $app.settings.input.dragAndDropEnabled)
+            } header: { Text("Drag-and-drop") } footer: {
+                Text("When off, dragged files are ignored. AppleEvent opens are also blocked.")
+                    .font(.caption).foregroundStyle(.secondary)
             }
-            Section("Watched Inbox folder") {
-                Toggle("Auto-convert files placed in this folder",
+
+            Section {
+                Toggle("Watch this folder and auto-convert new files",
                        isOn: $app.settings.input.watchInbox)
                 HStack {
                     TextField("Inbox path", text: $app.settings.input.inboxPath)
+                        .disabled(!app.settings.input.watchInbox)
                     Button("Choose…") { pickInbox() }
+                        .disabled(!app.settings.input.watchInbox)
                     Button("Reveal") {
                         if let url = app.settings.input.inboxURL {
                             NSWorkspace.shared.activateFileViewerSelecting([url])
                         }
                     }
+                    .disabled(!app.settings.input.watchInbox)
                 }
+            } header: { Text("Inbox folder") } footer: {
+                Text("New .note / .spd / .pdf / .png files saved here are picked up and converted automatically.")
+                    .font(.caption).foregroundStyle(.secondary)
             }
-            Section("System") {
-                Toggle("Run at login", isOn: $app.settings.advanced.runAtLogin)
+
+            Section {
+                Toggle("Open SuperMD at login", isOn: $app.settings.advanced.runAtLogin)
                 Toggle("Hide from Dock (menu-bar only)", isOn: $app.settings.advanced.hideFromDock)
-                Toggle("Notify on success", isOn: $app.settings.advanced.notificationsOnSuccess)
-                Toggle("Notify on failure", isOn: $app.settings.advanced.notificationsOnFailure)
+            } header: { Text("Startup") } footer: {
+                Text("Menu-bar-only mode skips the Dock icon. You can still reach the main window through the menu-bar extra.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+
+            Section {
+                Toggle("Notify when a conversion finishes",
+                       isOn: $app.settings.advanced.notificationsOnSuccess)
+                Toggle("Notify when a conversion fails",
+                       isOn: $app.settings.advanced.notificationsOnFailure)
+            } header: { Text("Notifications") } footer: {
+                Text("macOS will ask for notification permission the first time SuperMD wants to send one.")
+                    .font(.caption).foregroundStyle(.secondary)
             }
         }
         .formStyle(.grouped)
@@ -76,36 +98,63 @@ struct LLMSettingsTab: View {
 
     var body: some View {
         Form {
-            Section("Default model") {
+            Section("Provider & model") {
                 Picker("Provider", selection: $app.settings.llm.provider) {
                     ForEach(LLMProvider.allCases) { p in Text(p.rawValue).tag(p) }
                 }
                 modelPicker
             }
             if app.settings.llm.provider != .ollama {
-                Section("API key") {
+                Section {
+                    if keySavedForCurrentProvider {
+                        Label("A \(app.settings.llm.provider.rawValue) key is saved in Keychain.",
+                              systemImage: "checkmark.seal.fill")
+                            .foregroundStyle(.green)
+                    }
                     SecureField("Paste your \(app.settings.llm.provider.rawValue) API key",
                                 text: $apiKey)
                     HStack {
-                        Button(testing ? "Testing…" : "Test & save") { testAndSave() }
+                        Button(testing ? "Testing…" : (keySavedForCurrentProvider ? "Replace key" : "Test & save")) { testAndSave() }
                             .disabled(apiKey.isEmpty || testing)
                         Spacer()
                         statusBadge
                     }
+                } header: { Text("API key") } footer: {
+                    Text("Stored in macOS Keychain (service com.supermd.app). \"Test & save\" sends a 1-token probe to confirm the key works before persisting.")
+                        .font(.caption).foregroundStyle(.secondary)
                 }
             } else {
-                Section("Ollama") {
+                Section {
                     OllamaStatusView()
+                } header: { Text("Ollama") } footer: {
+                    Text("SuperMD talks to Ollama at http://127.0.0.1:11434 — install and run Ollama separately.")
+                        .font(.caption).foregroundStyle(.secondary)
                 }
             }
-            Section("Behavior") {
-                Toggle("Generate a short title for each note", isOn: $app.settings.llm.generateTitles)
+            Section {
+                Toggle("Generate a short title for each note",
+                       isOn: $app.settings.llm.generateTitles)
                 Stepper(value: $app.settings.llm.cooldownSeconds, in: 0...60, step: 1) {
                     Text("Cooldown between page calls: \(Int(app.settings.llm.cooldownSeconds))s")
                 }
+            } header: { Text("Behavior") } footer: {
+                Text("Title generation makes a second LLM call per note. Cooldown helps avoid rate limits on free-tier API keys.")
+                    .font(.caption).foregroundStyle(.secondary)
             }
         }
         .formStyle(.grouped)
+    }
+
+    private var keySavedForCurrentProvider: Bool {
+        let key: String = {
+            switch app.settings.llm.provider {
+            case .openai: return "openai"
+            case .anthropic: return "anthropic"
+            case .gemini: return "gemini"
+            case .ollama: return "ollama"
+            }
+        }()
+        return app.settings.llm.apiKeyPresent[key] == true
     }
 
     private var testing: Bool {
@@ -206,15 +255,21 @@ struct CloudSettingsTab: View {
                 Section {
                     Label("Signed in as \(signedEmail)", systemImage: "checkmark.seal.fill")
                         .foregroundStyle(.green)
-                    Toggle("Auto-sync", isOn: $app.settings.input.cloudSyncEnabled)
+                    Toggle("Auto-sync new notes into the Inbox",
+                           isOn: $app.settings.input.cloudSyncEnabled)
                         .onChange(of: app.settings.input.cloudSyncEnabled) { _, on in
                             Task { on ? await app.startCloudSync() : await app.stopCloudSync() }
                         }
-                    TextField("Remote path", text: $app.settings.input.cloudRemotePath)
+                    TextField("Remote folder", text: $app.settings.input.cloudRemotePath)
+                        .disabled(!app.settings.input.cloudSyncEnabled)
                     Stepper(value: $app.settings.input.cloudIntervalSec, in: 60...3600, step: 60) {
-                        Text("Sync every \(app.settings.input.cloudIntervalSec)s")
+                        Text("Check every \(intervalLabel(app.settings.input.cloudIntervalSec))")
                     }
+                    .disabled(!app.settings.input.cloudSyncEnabled)
                     Button("Sign out", role: .destructive) { signOut() }
+                } footer: {
+                    Text("New notes from your Supernote Cloud account get downloaded into the Inbox folder and are converted automatically.")
+                        .font(.caption).foregroundStyle(.secondary)
                 }
             default:
                 Section("Sign in to Supernote Cloud") {
@@ -253,6 +308,12 @@ struct CloudSettingsTab: View {
         }
     }
 
+    private func intervalLabel(_ secs: Int) -> String {
+        if secs < 60 { return "\(secs) seconds" }
+        let m = secs / 60
+        return m == 1 ? "1 minute" : "\(m) minutes"
+    }
+
     private func signOut() {
         Task {
             try? await app.sidecar.client.cloudLogout()
@@ -264,49 +325,82 @@ struct CloudSettingsTab: View {
     }
 }
 
-// MARK: - Obsidian
+// MARK: - Output
 
-struct ObsidianSettingsTab: View {
+struct OutputSettingsTab: View {
     @EnvironmentObject var app: AppModel
 
     var body: some View {
         Form {
-            Section("Mode") {
-                Picker("Output mode", selection: $app.settings.output.mode) {
+            Section {
+                Picker("Mode", selection: $app.settings.output.mode) {
                     ForEach(ObsidianMode.allCases) { Text($0.rawValue).tag($0) }
                 }
+            } header: { Text("Where converted notes land") } footer: {
+                modeFooter
             }
+
             switch app.settings.output.mode {
             case .vault, .headless:
                 vaultSection
+                Section("After conversion") {
+                    Toggle("Open new notes in Obsidian",
+                           isOn: $app.settings.output.openInObsidianAfter)
+                        .disabled(app.settings.output.selectedVaultID == nil)
+                }
             case .folder:
                 folderSection
-            }
-            Section("After conversion") {
-                Toggle("Open new notes in Obsidian", isOn: $app.settings.output.openInObsidianAfter)
-            }
-            Section("Per-folder mappings") {
-                FolderMappingEditor()
             }
         }
         .formStyle(.grouped)
     }
 
     @ViewBuilder
+    private var modeFooter: some View {
+        switch app.settings.output.mode {
+        case .vault:
+            Text("Drops notes into a real Obsidian vault on disk. SuperMD will offer to open each new note in Obsidian after conversion.")
+                .font(.caption).foregroundStyle(.secondary)
+        case .folder:
+            Text("Saves Markdown to any folder. Useful when you don't use Obsidian.")
+                .font(.caption).foregroundStyle(.secondary)
+        case .headless:
+            Text("Runs an obsidian-headless background process against the vault — for power users who want plugin processing without an open Obsidian window.")
+                .font(.caption).foregroundStyle(.secondary)
+        }
+    }
+
+    @ViewBuilder
     private var vaultSection: some View {
-        Section("Vault") {
-            Picker("Vault", selection: $app.settings.output.selectedVaultID) {
-                Text("None").tag(String?.none)
-                ForEach(app.settings.output.discoveredVaults) { v in
-                    Text("\(v.name)  \(v.path)").tag(Optional(v.id))
+        Section {
+            if app.settings.output.discoveredVaults.isEmpty {
+                Label("No Obsidian vaults found.", systemImage: "exclamationmark.triangle")
+                    .foregroundStyle(.orange)
+                Text("Open Obsidian at least once so it registers a vault, or switch to \"Generic output folder\" mode.")
+                    .font(.caption).foregroundStyle(.secondary)
+            } else {
+                Picker("Vault", selection: $app.settings.output.selectedVaultID) {
+                    Text("Select a vault…").tag(String?.none)
+                    ForEach(app.settings.output.discoveredVaults) { v in
+                        Text(v.name).tag(Optional(v.id))
+                    }
+                }
+                .onChange(of: app.settings.output.selectedVaultID) { _, newID in
+                    if let v = app.settings.output.discoveredVaults.first(where: { $0.id == newID }) {
+                        app.settings.output.selectedVaultPath = v.path
+                    }
+                }
+                if let v = app.settings.output.discoveredVaults.first(where: { $0.id == app.settings.output.selectedVaultID }) {
+                    Text(v.path)
+                        .font(.caption.monospaced())
+                        .foregroundStyle(.secondary)
                 }
             }
-            .onChange(of: app.settings.output.selectedVaultID) { _, newID in
-                if let v = app.settings.output.discoveredVaults.first(where: { $0.id == newID }) {
-                    app.settings.output.selectedVaultPath = v.path
-                }
-            }
-            TextField("Subfolder in vault", text: $app.settings.output.subfolderInVault)
+            TextField("Subfolder inside the vault", text: $app.settings.output.subfolderInVault)
+                .disabled(app.settings.output.selectedVaultID == nil)
+        } header: { Text("Vault") } footer: {
+            Text("Notes are written under <vault>/<subfolder>/…")
+                .font(.caption).foregroundStyle(.secondary)
         }
     }
 
@@ -363,21 +457,36 @@ struct TemplateSettingsTab: View {
 
     var body: some View {
         Form {
-            Section("Output paths") {
+            Section {
                 TextField("Folder template", text: $app.settings.templates.pathTemplate)
                 TextField("Filename template", text: $app.settings.templates.filenameTemplate)
-                Text("Tokens: {{file_basename}}, {{title}}, {{DATE:YYYY/MM-DD}}, {{year}}, {{month}}.")
+            } header: { Text("Output paths") } footer: {
+                Text("Tokens: {{file_basename}}, {{title}}, {{DATE:YYYY/MM-DD}}, {{year}}, {{month}}, {{day}}. Title only resolves if \"Generate a short title\" is on.")
                     .font(.caption).foregroundStyle(.secondary)
             }
-            Section("Body template") {
+
+            Section {
                 TextEditor(text: $app.settings.templates.bodyTemplate)
                     .font(.system(.body, design: .monospaced))
                     .frame(minHeight: 140)
+                Button("Reset to default") {
+                    app.settings.templates.bodyTemplate = TemplateSettings().bodyTemplate
+                }
+            } header: { Text("Body template") } footer: {
+                Text("Jinja2 template wrapped around the model's transcription. Must contain {{llm_output}} somewhere or your notes will be empty.")
+                    .font(.caption).foregroundStyle(.secondary)
             }
-            Section("Per-page LLM instruction") {
+
+            Section {
                 TextEditor(text: $app.settings.templates.pageInstruction)
                     .font(.system(.body, design: .monospaced))
                     .frame(minHeight: 100)
+                Button("Reset to default") {
+                    app.settings.templates.pageInstruction = TemplateSettings().pageInstruction
+                }
+            } header: { Text("Per-page LLM instruction") } footer: {
+                Text("Sent to the model with every page image. Lean on this to control style (Markdown flavor, math syntax, wiki-links, etc.).")
+                    .font(.caption).foregroundStyle(.secondary)
             }
         }
         .formStyle(.grouped)
@@ -392,11 +501,14 @@ struct AdvancedSettingsTab: View {
 
     var body: some View {
         Form {
-            Section("Logging") {
+            Section {
                 Picker("Sidecar log level", selection: $app.settings.advanced.sidecarLogLevel) {
                     ForEach(["DEBUG", "INFO", "WARNING", "ERROR"], id: \.self) {
                         Text($0).tag($0)
                     }
+                }
+                .onChange(of: app.settings.advanced.sidecarLogLevel) { _, level in
+                    Task { try? await app.sidecar.client.setLogLevel(level) }
                 }
                 Button("Open log directory") {
                     Task {
@@ -405,8 +517,12 @@ struct AdvancedSettingsTab: View {
                         }
                     }
                 }
+            } header: { Text("Logging") } footer: {
+                Text("Changes apply to the running sidecar immediately. DEBUG is noisy — leave on INFO unless investigating an issue.")
+                    .font(.caption).foregroundStyle(.secondary)
             }
-            Section("On-disk YAML config") {
+
+            Section {
                 TextEditor(text: $configYaml)
                     .font(.system(.body, design: .monospaced))
                     .frame(minHeight: 240)
@@ -415,6 +531,9 @@ struct AdvancedSettingsTab: View {
                     Spacer()
                     Button("Save") { save() }.keyboardShortcut("s")
                 }
+            } header: { Text("On-disk YAML config") } footer: {
+                Text("Direct edit of <config_dir>/supermd.yaml — only the CLI and headless runs read this file. The macOS app reads its own UI settings; use this tab to keep them in sync if you also run the CLI.")
+                    .font(.caption).foregroundStyle(.secondary)
             }
         }
         .formStyle(.grouped)

@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
+import logging
 import os
 import sys
 from typing import Any, Dict
 
 from supermd_sidecar import __version__
-from supermd_sidecar.rpc import Handler, RpcContext
+from supermd_sidecar.rpc import Handler, RpcContext, rpc_error
 from supermd_sidecar.state import SidecarState
 
 
@@ -40,8 +41,17 @@ def register(state: SidecarState) -> Dict[str, Handler]:
             "metadata_db": str(state.metadata_db),
         }
 
+    def set_log_level(ctx: RpcContext, params: Dict[str, Any]) -> Dict[str, Any]:
+        level = (params.get("level") or "").upper()
+        levels = {"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"}
+        if level not in levels:
+            raise rpc_error(-32602, f"unsupported level: {level!r}; expected one of {sorted(levels)}")
+        logging.getLogger().setLevel(getattr(logging, level))
+        return {"ok": True, "level": level}
+
     return {
         "system.ping": ping,
         "system.shutdown": shutdown,
         "system.config_path": config_path,
+        "system.set_log_level": set_log_level,
     }

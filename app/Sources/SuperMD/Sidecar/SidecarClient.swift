@@ -16,6 +16,10 @@ final class SidecarClient {
         _ = try await call("system.shutdown", params: [:])
     }
 
+    func setLogLevel(_ level: String) async throws {
+        _ = try await call("system.set_log_level", params: ["level": level])
+    }
+
     func configPath() async throws -> ConfigPaths {
         let r = try await call("system.config_path", params: [:])
         return ConfigPaths(
