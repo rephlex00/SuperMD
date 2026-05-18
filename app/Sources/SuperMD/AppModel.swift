@@ -30,6 +30,17 @@ final class AppModel: ObservableObject {
     }
 
     private var didStart = false
+    private static var didFireTestDrop = false
+
+    /// Tear down the current sidecar (if alive) and start a fresh one. Used
+    /// by the "Restart Sidecar" UI when the previous instance died.
+    func restartSidecar() {
+        sidecar.shutdown()
+        didStart = false
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
+            self?.start()
+        }
+    }
 
     func start() {
         FileHandle.standardError.write(Data("[AppModel] start() called (didStart=\(didStart))\n".utf8))
@@ -97,8 +108,11 @@ final class AppModel: ObservableObject {
 
         // Test hook: SUPERMD_TEST_DROP="/path/a.note,/path/b.note" injects a
         // synthetic drop ~2s after launch so automated tests don't need
-        // synthetic mouse events.
-        if let dropList = ProcessInfo.processInfo.environment["SUPERMD_TEST_DROP"], !dropList.isEmpty {
+        // synthetic mouse events. Once per process lifetime so a sidecar
+        // restart doesn't re-fire it.
+        if !Self.didFireTestDrop,
+           let dropList = ProcessInfo.processInfo.environment["SUPERMD_TEST_DROP"], !dropList.isEmpty {
+            Self.didFireTestDrop = true
             let urls = dropList.split(separator: ",").map { URL(fileURLWithPath: String($0)) }
             FileHandle.standardError.write(Data("[AppModel] TEST_DROP scheduling \(urls.count) urls\n".utf8))
             Task { @MainActor in

@@ -7,6 +7,7 @@ struct ContentView: View {
     var body: some View {
         VStack(spacing: 0) {
             HeaderBar()
+            SidecarStatusBanner()
             Divider()
             HSplitView {
                 JobQueueView()
@@ -50,6 +51,37 @@ struct ContentView: View {
             app.handleDroppedFiles(urls)
         }
         return true
+    }
+}
+
+private struct SidecarStatusBanner: View {
+    @EnvironmentObject var app: AppModel
+
+    var body: some View {
+        switch app.sidecarStatus {
+        case .running:
+            EmptyView()
+        case .stopped:
+            banner(systemImage: "exclamationmark.triangle.fill",
+                   text: "Sidecar stopped.",
+                   tint: .orange)
+        case .failed(let reason):
+            banner(systemImage: "exclamationmark.octagon.fill",
+                   text: "Sidecar failed: \(reason).",
+                   tint: .red)
+        }
+    }
+
+    private func banner(systemImage: String, text: String, tint: Color) -> some View {
+        HStack {
+            Image(systemName: systemImage).foregroundStyle(tint)
+            Text(text).font(.callout)
+            Spacer()
+            Button("Restart Sidecar") { app.restartSidecar() }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 6)
+        .background(tint.opacity(0.12))
     }
 }
 
