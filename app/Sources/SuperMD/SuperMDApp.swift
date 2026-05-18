@@ -10,7 +10,12 @@ struct SuperMDApp: App {
             ContentView()
                 .environmentObject(appModel)
                 .frame(minWidth: 720, minHeight: 480)
-                .onAppear { appModel.start() }
+                .onAppear {
+                    // Defer to next runloop so the publish chain from start()
+                    // (sidecarStatus, etc.) doesn't fire during scene mount,
+                    // which causes WindowGroup to re-mount and stack windows.
+                    DispatchQueue.main.async { appModel.start() }
+                }
         }
         .commands {
             CommandGroup(replacing: .appInfo) {

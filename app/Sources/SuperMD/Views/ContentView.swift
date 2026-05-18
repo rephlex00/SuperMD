@@ -16,7 +16,8 @@ struct ContentView: View {
             }
         }
         .onDrop(of: [.fileURL], isTargeted: nil) { providers in
-            handleDrop(providers: providers)
+            guard app.settings.input.dragAndDropEnabled else { return false }
+            return handleDrop(providers: providers)
         }
         .sheet(item: $app.pendingOTP) { otp in
             CloudOTPSheet(email: otp.email)

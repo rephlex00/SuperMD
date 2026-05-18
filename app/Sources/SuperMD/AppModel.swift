@@ -1,6 +1,7 @@
 import Foundation
 import AppKit
 import Combine
+import ServiceManagement
 
 /// Top-level app state. Owns the SidecarManager, the conversion queue, and
 /// the user's settings. SwiftUI views observe this via `@EnvironmentObject`.
@@ -64,6 +65,8 @@ final class AppModel: ObservableObject {
             .debounce(for: .milliseconds(400), scheduler: RunLoop.main)
             .sink { $0.save() }
             .store(in: &cancellables)
+
+        applyEffectfulSettings()
 
         // Start watcher if configured. Pushed off main because the first
         // createDirectory(~/Documents/...) can trigger a Documents-folder
@@ -145,6 +148,35 @@ final class AppModel: ObservableObject {
 
     func forceReprocessSelection() {
         queue.reprocessSelected()
+    }
+
+    private func applyEffectfulSettings() {
+        // Activation policy: regular (with dock) vs accessory (menu-bar only).
+        let target: NSApplication.ActivationPolicy =
+            settings.advanced.hideFromDock ? .accessory : .regular
+        if NSApp.activationPolicy() != target {
+            NSApp.setActivationPolicy(target)
+        }
+
+        // Open at login. SMAppService requires macOS 13+; silent on older OS
+        // or unsigned dev builds where registration is rejected.
+        if #available(macOS 13.0, *) {
+            let svc = SMAppService.mainApp
+            let want = settings.advanced.runAtLogin
+            do {
+                switch (want, svc.status) {
+                case (true, .notRegistered), (true, .notFound):
+                    try svc.register()
+                case (false, .enabled), (false, .requiresApproval):
+                    try svc.unregister()
+                default:
+                    break
+                }
+            } catch {
+                FileHandle.standardError.write(Data(
+                    "[AppModel] SMAppService toggle failed: \(error)\n".utf8))
+            }
+        }
     }
 
     fileprivate func inputFileName(forTaskID taskID: String?) -> String {
