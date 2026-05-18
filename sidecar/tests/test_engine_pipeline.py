@@ -52,17 +52,23 @@ def _wait_for_notification(harness, method: str, task_id: str | None = None,
     )
 
 
+def _stub_llm(monkeypatch):
+    """Replace LLM calls everywhere they're imported. converter.py does
+    `from supermd.ai_utils import image_to_markdown` at module-load time so
+    patching `ai_utils.image_to_markdown` alone isn't enough — the converter
+    has already bound its own reference."""
+    from supermd import ai_utils, converter
+    stub = lambda image_path, context, model, prompt, ctx_dict: "# stub page\n"
+    monkeypatch.setattr(ai_utils, "image_to_markdown", stub)
+    monkeypatch.setattr(converter, "image_to_markdown", stub)
+    monkeypatch.setattr(ai_utils, "validate_model_key", lambda model: None)
+
+
 def test_convert_real_note_file_produces_markdown(harness, tmp_path,
                                                   note_file, monkeypatch):
     """Drop a real .note in, get Markdown out. Stubs the LLM so we exercise
     the parser/extractor path but not the network."""
-    from supermd import ai_utils
-    monkeypatch.setattr(
-        ai_utils,
-        "image_to_markdown",
-        lambda image_path, context, model, prompt, ctx_dict: "# stub page\n",
-    )
-    monkeypatch.setattr(ai_utils, "validate_model_key", lambda model: None)
+    _stub_llm(monkeypatch)
 
     output_dir = tmp_path / "out"
     output_dir.mkdir()
@@ -83,13 +89,7 @@ def test_convert_real_note_file_produces_markdown(harness, tmp_path,
 
 def test_skip_unchanged_real_note(harness, tmp_path, note_file, monkeypatch):
     """Second pass over the same .note should be skipped via the metadata DB."""
-    from supermd import ai_utils
-    monkeypatch.setattr(
-        ai_utils,
-        "image_to_markdown",
-        lambda *a, **kw: "# stub\n",
-    )
-    monkeypatch.setattr(ai_utils, "validate_model_key", lambda model: None)
+    _stub_llm(monkeypatch)
 
     output_dir = tmp_path / "out"
     output_dir.mkdir()

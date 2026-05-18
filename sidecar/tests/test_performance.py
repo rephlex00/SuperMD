@@ -70,12 +70,10 @@ def test_100_pings_under_2s(harness):
 def test_convert_single_png_under_5s_with_stub_llm(harness, tmp_path, monkeypatch):
     """An end-to-end convert of one tiny PNG with a stubbed LLM should finish
     in a few hundred milliseconds. Budget set to 5s for slow CI runners."""
-    from supermd import ai_utils
-    monkeypatch.setattr(
-        ai_utils,
-        "image_to_markdown",
-        lambda *a, **kw: "# stub\n",
-    )
+    from supermd import ai_utils, converter
+    stub = lambda *a, **kw: "# stub\n"
+    monkeypatch.setattr(ai_utils, "image_to_markdown", stub)
+    monkeypatch.setattr(converter, "image_to_markdown", stub)
     monkeypatch.setattr(ai_utils, "validate_model_key", lambda model: None)
 
     src = tmp_path / "page.png"
@@ -131,8 +129,10 @@ def test_otp_round_trip_under_500ms(harness, stub_sncloud):
 def test_directory_walk_scales_linearly(harness, tmp_path, monkeypatch):
     """Walking 50 PNGs and queuing them should be near-instant — under 2s.
     Catches regressions like an accidental quadratic file-stat loop."""
-    from supermd import ai_utils
-    monkeypatch.setattr(ai_utils, "image_to_markdown", lambda *a, **kw: "# x\n")
+    from supermd import ai_utils, converter
+    stub = lambda *a, **kw: "# x\n"
+    monkeypatch.setattr(ai_utils, "image_to_markdown", stub)
+    monkeypatch.setattr(converter, "image_to_markdown", stub)
     monkeypatch.setattr(ai_utils, "validate_model_key", lambda m: None)
 
     src = tmp_path / "src"

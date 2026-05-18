@@ -29,13 +29,15 @@ def tiny_png(tmp_path):
 @pytest.fixture
 def stub_llm(monkeypatch):
     """Make the engine's ai_utils.image_to_markdown return a fixed string
-    instead of actually calling an LLM."""
-    from supermd import ai_utils
-    monkeypatch.setattr(
-        ai_utils,
-        "image_to_markdown",
-        lambda image_path, context, model, prompt, ctx_dict: "# Hello from stub\n",
-    )
+    instead of actually calling an LLM. converter.py imports the function
+    by name (`from supermd.ai_utils import image_to_markdown`), so we have
+    to patch both the source module *and* the local binding the converter
+    captured at import time — otherwise tests that ran earlier in the
+    process can leave a stale reference and we hit the real API."""
+    from supermd import ai_utils, converter
+    stub = lambda image_path, context, model, prompt, ctx_dict: "# Hello from stub\n"
+    monkeypatch.setattr(ai_utils, "image_to_markdown", stub)
+    monkeypatch.setattr(converter, "image_to_markdown", stub)
     monkeypatch.setattr(ai_utils, "validate_model_key", lambda model: None)
 
 

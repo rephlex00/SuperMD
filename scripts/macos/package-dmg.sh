@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
-# Wrap the .app into a drag-to-Applications DMG.
+# Wrap the .app into a drag-to-Applications DMG using hdiutil directly.
+# We avoid create-dmg here because its AppleScript-driven styling step
+# times out in headless / CI / automation-restricted environments —
+# producing leftover rw.*.dmg files and no final image.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
@@ -13,22 +16,24 @@ if [[ ! -d "$APP" ]]; then
     exit 1
 fi
 
-if ! command -v create-dmg >/dev/null 2>&1; then
-    echo "create-dmg not found. Install with: brew install create-dmg" >&2
-    exit 1
-fi
+# Clean up any prior runs (including create-dmg leftovers).
+rm -f "$DMG" "$DIST"/rw.*.dmg
 
-rm -f "$DMG"
+STAGE="$(mktemp -d)"
+trap 'rm -rf "$STAGE"' EXIT
 
-create-dmg \
-    --volname "SuperMD $VERSION" \
-    --window-size 540 360 \
-    --icon-size 96 \
-    --icon "SuperMD.app" 130 180 \
-    --app-drop-link 410 180 \
-    --hide-extension "SuperMD.app" \
-    --no-internet-enable \
-    "$DMG" \
-    "$APP"
+# Stage the app + an Applications symlink so the user gets drag-to-install.
+cp -R "$APP" "$STAGE/SuperMD.app"
+ln -s /Applications "$STAGE/Applications"
+
+hdiutil create \
+    -volname "SuperMD $VERSION" \
+    -srcfolder "$STAGE" \
+    -fs HFS+ \
+    -format UDZO \
+    -imagekey zlib-level=9 \
+    -ov \
+    "$DMG"
 
 echo "Built: $DMG"
+ls -lh "$DMG"
