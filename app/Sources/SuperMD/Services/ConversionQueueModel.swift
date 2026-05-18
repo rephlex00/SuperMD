@@ -27,18 +27,26 @@ final class ConversionQueueModel: ObservableObject {
             startedAt: Date()
         )
         rows.append(row)
+        if !isPaused {
+            dispatch(rowID: row.id)
+        }
+    }
 
+    private func dispatch(rowID: JobRow.ID) {
+        guard let i = rows.firstIndex(where: { $0.id == rowID }) else { return }
+        let input = rows[i].input
+        let output = rows[i].output
         Task {
             do {
                 let taskID = try await AppModel.shared!.sidecar.client.convertFile(
                     input: input.path,
                     output: output.path
                 )
-                if let i = rows.firstIndex(where: { $0.id == row.id }) {
+                if let i = rows.firstIndex(where: { $0.id == rowID }) {
                     rows[i].sidecarTaskID = taskID
                 }
             } catch {
-                if let i = rows.firstIndex(where: { $0.id == row.id }) {
+                if let i = rows.firstIndex(where: { $0.id == rowID }) {
                     rows[i].status = .failed
                     rows[i].error = error.localizedDescription
                 }
@@ -57,7 +65,14 @@ final class ConversionQueueModel: ObservableObject {
         rows.append(row)
     }
 
-    func togglePause() { isPaused.toggle() }
+    func togglePause() {
+        isPaused.toggle()
+        if !isPaused {
+            // Drain any rows that were queued while paused.
+            let queued = rows.filter { $0.status == .queued && $0.sidecarTaskID == nil }
+            for r in queued { dispatch(rowID: r.id) }
+        }
+    }
 
     func reprocessSelected() {
         for id in selection {
