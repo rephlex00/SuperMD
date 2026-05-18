@@ -38,6 +38,22 @@ final class AppSettings: ObservableObject {
             UserDefaults.standard.set(data, forKey: Self.storeKey)
         }
     }
+
+    /// Translate the bits of settings the engine cares about into the
+    /// SuperMDConfig kwargs the sidecar's convert.file RPC accepts in its
+    /// `config` parameter. Keep keys aligned with src/supermd/config.py.
+    func engineConfigDict() -> [String: Any] {
+        return [
+            "model": llm.defaultModelID,
+            "prompt": templates.pageInstruction,
+            "template": templates.bodyTemplate,
+            "output_path_template": templates.pathTemplate,
+            "output_filename_template": templates.filenameTemplate,
+            "defaults": [
+                "cooldown": llm.cooldownSeconds,
+            ],
+        ]
+    }
 }
 
 private struct SettingsBlob: Codable {

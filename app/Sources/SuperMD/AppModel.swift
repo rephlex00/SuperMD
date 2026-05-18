@@ -278,19 +278,17 @@ extension AppModel: SidecarManagerDelegate {
                    settings.output.mode == .vault || settings.output.mode == .headless,
                    let vaultID = settings.output.selectedVaultID,
                    let outputPath = notification.params["output_path"] as? String,
-                   let vaultRoot = settings.output.selectedVaultPath {
-                    // obsidian.open_note expects a path relative to the vault.
-                    let rel = (outputPath as NSString).abbreviatingWithTildeInPath
+                   let vaultRoot = settings.output.selectedVaultPath,
+                   let vault = settings.output.discoveredVaults.first(where: { $0.id == vaultID }) {
+                    // obsidian://open takes the vault's *display name*, not
+                    // its registry UUID. And the file path must be relative
+                    // to the vault root.
                     let vaultURL = URL(fileURLWithPath: (vaultRoot as NSString).expandingTildeInPath)
                     let outURL = URL(fileURLWithPath: outputPath)
-                    let relPath: String
-                    if outURL.path.hasPrefix(vaultURL.path) {
-                        relPath = String(outURL.path.dropFirst(vaultURL.path.count + 1))
-                    } else {
-                        relPath = rel
-                    }
+                    guard outURL.path.hasPrefix(vaultURL.path) else { break }
+                    let relPath = String(outURL.path.dropFirst(vaultURL.path.count + 1))
                     Task {
-                        try? await sidecar.client.openNote(vault: vaultID, file: relPath)
+                        try? await sidecar.client.openNote(vault: vault.name, file: relPath)
                     }
                 }
             case "convert.skipped":

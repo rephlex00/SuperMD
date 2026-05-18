@@ -32,15 +32,21 @@ final class ConversionQueueModel: ObservableObject {
         }
     }
 
-    private func dispatch(rowID: JobRow.ID) {
+    private func dispatch(rowID: JobRow.ID, force: Bool = false) {
         guard let i = rows.firstIndex(where: { $0.id == rowID }) else { return }
         let input = rows[i].input
         let output = rows[i].output
+        let settings = AppModel.shared!.settings
+        let model = settings.llm.defaultModelID
+        let config = settings.engineConfigDict()
         Task {
             do {
                 let taskID = try await AppModel.shared!.sidecar.client.convertFile(
                     input: input.path,
-                    output: output.path
+                    output: output.path,
+                    model: model,
+                    force: force,
+                    config: config
                 )
                 if let i = rows.firstIndex(where: { $0.id == rowID }) {
                     rows[i].sidecarTaskID = taskID
@@ -99,14 +105,7 @@ final class ConversionQueueModel: ObservableObject {
 
     func reprocessSelected() {
         for id in selection {
-            guard let row = rows.first(where: { $0.id == id }) else { continue }
-            Task {
-                _ = try? await AppModel.shared!.sidecar.client.convertFile(
-                    input: row.input.path,
-                    output: row.output.path,
-                    force: true
-                )
-            }
+            dispatch(rowID: id, force: true)
         }
     }
 
