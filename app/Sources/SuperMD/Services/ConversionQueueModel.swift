@@ -109,6 +109,34 @@ final class ConversionQueueModel: ObservableObject {
         }
     }
 
+    /// Re-run a single row with force=true. Used by the per-row "Run again"
+    /// button and the row context menu — most useful for rows that finished
+    /// .skipped but the user actually wants converted again.
+    func forceRerun(rowID: JobRow.ID) {
+        guard let i = rows.firstIndex(where: { $0.id == rowID }) else { return }
+        rows[i].status = .queued
+        rows[i].sidecarTaskID = nil
+        rows[i].error = nil
+        rows[i].skipReason = nil
+        rows[i].finishedAt = nil
+        rows[i].currentPage = 0
+        rows[i].totalPages = 0
+        rows[i].durationMs = 0
+        if !isPaused {
+            dispatch(rowID: rowID, force: true)
+        }
+    }
+
+    /// Remove a row entirely (after cancelling the in-flight task if any).
+    func remove(rowID: JobRow.ID) {
+        guard let i = rows.firstIndex(where: { $0.id == rowID }) else { return }
+        if let taskID = rows[i].sidecarTaskID, rows[i].status == .running || rows[i].status == .queued {
+            Task { try? await AppModel.shared!.sidecar.client.convertCancel(taskID: taskID) }
+        }
+        rows.remove(at: i)
+        selection.remove(rowID)
+    }
+
     // MARK: - Notification handlers (driven by AppModel)
 
     func handleStarted(_ p: [String: Any]) {

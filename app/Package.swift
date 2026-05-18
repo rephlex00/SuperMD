@@ -13,8 +13,14 @@ let package = Package(
         .package(url: "https://github.com/pointfreeco/swift-snapshot-testing", from: "1.17.0"),
     ],
     targets: [
+        .target(
+            name: "SuperMDObjC",
+            path: "Sources/SuperMDObjC",
+            publicHeadersPath: "include"
+        ),
         .executableTarget(
             name: "SuperMD",
+            dependencies: ["SuperMDObjC"],
             path: "Sources/SuperMD",
             swiftSettings: [
                 .enableExperimentalFeature("StrictConcurrency"),

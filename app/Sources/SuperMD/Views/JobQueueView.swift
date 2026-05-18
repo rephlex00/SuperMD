@@ -17,7 +17,18 @@ struct JobQueueView: View {
             } else {
                 List(selection: $app.queue.selection) {
                     ForEach(app.queue.rows.reversed()) { row in
-                        JobRowView(row: row).tag(row.id)
+                        JobRowView(row: row)
+                            .tag(row.id)
+                            .contextMenu {
+                                if row.status == .skipped || row.status == .done || row.status == .failed {
+                                    Button("Run again") { app.queue.forceRerun(rowID: row.id) }
+                                }
+                                if row.status == .running || row.status == .queued {
+                                    Button("Cancel") { app.queue.cancel(rowID: row.id) }
+                                }
+                                Divider()
+                                Button("Remove from list") { app.queue.remove(rowID: row.id) }
+                            }
                     }
                 }
                 .listStyle(.inset(alternatesRowBackgrounds: true))
@@ -43,6 +54,7 @@ private struct EmptyDropHint: View {
 }
 
 struct JobRowView: View {
+    @EnvironmentObject var app: AppModel
     let row: JobRow
 
     var body: some View {
@@ -58,6 +70,16 @@ struct JobRowView: View {
             if row.status == .running, row.totalPages > 0 {
                 ProgressView(value: Double(row.currentPage), total: Double(row.totalPages))
                     .frame(width: 90)
+            }
+            if row.status == .skipped {
+                Button {
+                    app.queue.forceRerun(rowID: row.id)
+                } label: {
+                    Label("Run again", systemImage: "arrow.clockwise")
+                        .labelStyle(.iconOnly)
+                }
+                .buttonStyle(.borderless)
+                .help("Re-run with --force (ignores the skip)")
             }
         }
         .padding(.vertical, 2)
