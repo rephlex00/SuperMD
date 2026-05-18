@@ -43,7 +43,7 @@ final class AppSettings: ObservableObject {
     /// SuperMDConfig kwargs the sidecar's convert.file RPC accepts in its
     /// `config` parameter. Keep keys aligned with src/supermd/config.py.
     func engineConfigDict() -> [String: Any] {
-        return [
+        var dict: [String: Any] = [
             "model": llm.defaultModelID,
             "prompt": templates.pageInstruction,
             "template": templates.bodyTemplate,
@@ -53,6 +53,14 @@ final class AppSettings: ObservableObject {
                 "cooldown": llm.cooldownSeconds,
             ],
         ]
+        // The engine only invokes the title-generation pass when
+        // note_title_prompt is a non-empty string. The default UI toggle
+        // hands it a sensible default prompt; users can override later.
+        if llm.generateTitles {
+            dict["note_title_prompt"] =
+                "Summarize this note in 3-6 words as a Markdown-safe title; reply with just the title."
+        }
+        return dict
     }
 }
 

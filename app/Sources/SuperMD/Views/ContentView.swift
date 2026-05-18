@@ -23,6 +23,7 @@ struct ContentView: View {
         .sheet(item: $app.pendingOTP) { otp in
             CloudOTPSheet(email: otp.email)
         }
+        .sheet(isPresented: $app.showAbout) { AboutSheet() }
     }
 
     private func handleDrop(providers: [NSItemProvider]) -> Bool {
@@ -127,5 +128,37 @@ private struct HeaderBar: View {
         case .error(let s):
             Text("Cloud error: \(s)").font(.caption).foregroundStyle(.red)
         }
+    }
+}
+
+private struct AboutSheet: View {
+    @EnvironmentObject var app: AppModel
+    @Environment(\.dismiss) private var dismiss
+
+    private var version: String {
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?"
+    }
+
+    var body: some View {
+        VStack(spacing: 14) {
+            Image(systemName: "tray.full.fill")
+                .font(.system(size: 48))
+                .foregroundStyle(.tint)
+            Text("SuperMD").font(.title)
+            Text("Version \(version)").foregroundStyle(.secondary)
+            Text("Supernote notes → Markdown via LLM transcription.")
+                .multilineTextAlignment(.center)
+                .padding(.horizontal)
+            HStack {
+                Link("Source", destination: URL(string: "https://github.com/anthropics/SuperMD")!)
+                Text("•")
+                Link("Issues", destination: URL(string: "https://github.com/anthropics/SuperMD/issues")!)
+            }
+            .font(.callout)
+            Button("Done") { dismiss() }
+                .keyboardShortcut(.defaultAction)
+        }
+        .padding(28)
+        .frame(width: 340)
     }
 }
