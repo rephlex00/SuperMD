@@ -55,6 +55,12 @@ def register(state: SidecarState) -> Dict[str, Handler]:
         started = time.monotonic()
         manager = MetadataManager(task.output)
         try:
+            def _on_page(page: int, total: int) -> None:
+                state.emit(
+                    "convert.page",
+                    {"task_id": task.task_id, "page": page, "total": total},
+                )
+
             convert_file(
                 extractor,
                 task.file,
@@ -64,6 +70,7 @@ def register(state: SidecarState) -> Dict[str, Handler]:
                 model=model or cfg.model,
                 metadata_manager=manager,
                 cooldown=cfg.defaults.cooldown,
+                page_callback=_on_page,
             )
             duration_ms = int((time.monotonic() - started) * 1000)
             state.emit(

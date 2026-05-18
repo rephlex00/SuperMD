@@ -48,6 +48,7 @@ def process_pages(
     progress_bar: tqdm | None = None,
     prompt_context: dict | None = None,
     cooldown_state: CooldownState | None = None,
+    page_callback=None,
 ) -> str:
     template_output = ""
     total_pages = len(pngs)
@@ -56,6 +57,11 @@ def process_pages(
         # Update progress description
         if progress_bar:
              progress_bar.set_description(f"Processing Page {i+1}/{total_pages}")
+        if page_callback:
+            try:
+                page_callback(i + 1, total_pages)
+            except Exception:
+                pass
 
         # Enforce cooldown before every API call (skips wait on the very first call ever)
         if cooldown_state:
@@ -230,6 +236,7 @@ def convert_file(
     metadata_manager: MetadataManager | None = None,
     cooldown: float = 0.0,
     _cooldown_state: CooldownState | None = None,
+    page_callback=None,
 ) -> None:
     console.debug(f"convert_file: {shorten_path(file_name)}")
     
@@ -298,6 +305,7 @@ def convert_file(
                 progress_bar,
                 basic_context,
                 cooldown_state=cooldown_state,
+                page_callback=page_callback,
             )
 
             notebook = image_extractor.get_notebook(file_name)

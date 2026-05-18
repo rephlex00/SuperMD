@@ -83,6 +83,7 @@ def register(state: SidecarState) -> Dict[str, Handler]:
     def test_key(ctx: RpcContext, params: Dict[str, Any]) -> Dict[str, Any]:
         provider = params.get("provider")
         key = params.get("key")
+        log.info("test_key: enter provider=%s", provider)
         if not provider or not key:
             raise rpc_error(-32602, "provider and key are required")
 
@@ -90,11 +91,9 @@ def register(state: SidecarState) -> Dict[str, Handler]:
         if env_var is None:
             raise rpc_error(-32602, f"unsupported provider: {provider}")
 
-        # Quick liveness check: list one model and call .prompt() with a 1-token
-        # ceiling. We don't want to bill the user for a real call, so we just
-        # try to instantiate a model and check the auth is recognized.
         os.environ[env_var] = key
         try:
+            log.info("test_key: importing llm")
             import llm  # noqa: PLC0415
 
             sample_id = {
@@ -102,21 +101,32 @@ def register(state: SidecarState) -> Dict[str, Handler]:
                 "anthropic": "claude-3-5-haiku-latest",
                 "gemini": "gemini-2.0-flash",
             }[provider]
-            llm.get_model(sample_id)
+            log.info("test_key: get_model %s", sample_id)
+            model = llm.get_model(sample_id)
+            # Make a real auth-validating call by sending a 1-token prompt.
+            # llm.get_model alone does NOT validate the key.
+            log.info("test_key: probe prompt")
+            resp = model.prompt("hi", max_tokens=1)
+            _ = resp.text()
+            log.info("test_key: ok")
             return {"ok": True, "model": sample_id}
         except Exception as e:  # noqa: BLE001
+            log.info("test_key: rejected: %s", e)
             raise rpc_error(-32001, f"key rejected: {e}")
 
     def set_key(ctx: RpcContext, params: Dict[str, Any]) -> Dict[str, Any]:
         provider = params.get("provider")
         key = params.get("key")
+        log.info("set_key: enter provider=%s", provider)
         if not provider or not key:
             raise rpc_error(-32602, "provider and key are required")
 
         kr = _keyring()
         if kr is None:
             raise rpc_error(-32002, "keyring not available in this environment")
+        log.info("set_key: keyring.set_password")
         kr.set_password(_KEYCHAIN_SERVICE, f"llm.{provider}", key)
+        log.info("set_key: ok")
 
         # Also export for the current process so subsequent convert calls work
         # immediately without restarting the sidecar.
