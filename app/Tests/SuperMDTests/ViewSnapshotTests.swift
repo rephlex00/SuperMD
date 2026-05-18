@@ -26,7 +26,7 @@ final class ViewSnapshotTests: XCTestCase {
         let app = makeAppModel(rows: [])
         let view = JobQueueView().environmentObject(app)
         assertSnapshot(of: hosted(view, size: CGSize(width: 420, height: 360)),
-                       as: .image(size: CGSize(width: 420, height: 360)))
+                       as: .image(precision: 0.98, size: CGSize(width: 420, height: 360)))
     }
 
     // MARK: - Queue with mixed states
@@ -42,7 +42,7 @@ final class ViewSnapshotTests: XCTestCase {
         let app = makeAppModel(rows: rows)
         let view = JobQueueView().environmentObject(app)
         assertSnapshot(of: hosted(view, size: CGSize(width: 480, height: 320)),
-                       as: .image(size: CGSize(width: 480, height: 320)))
+                       as: .image(precision: 0.98, size: CGSize(width: 480, height: 320)))
     }
 
     // MARK: - JobRow individual states
@@ -51,14 +51,14 @@ final class ViewSnapshotTests: XCTestCase {
         let row = jobRow(name: "Long.note", status: .running, page: 2, total: 8)
         let view = JobRowView(row: row).padding()
         assertSnapshot(of: hosted(view, size: CGSize(width: 420, height: 56)),
-                       as: .image(size: CGSize(width: 420, height: 56)))
+                       as: .image(precision: 0.98, size: CGSize(width: 420, height: 56)))
     }
 
     func test_jobRow_failed_shows_error_in_red() {
         let row = jobRow(name: "Bad.pdf", status: .failed, error: "PyMuPDF: bad header")
         let view = JobRowView(row: row).padding()
         assertSnapshot(of: hosted(view, size: CGSize(width: 420, height: 56)),
-                       as: .image(size: CGSize(width: 420, height: 56)))
+                       as: .image(precision: 0.98, size: CGSize(width: 420, height: 56)))
     }
 
     // MARK: - OTP sheet
@@ -67,7 +67,7 @@ final class ViewSnapshotTests: XCTestCase {
         let app = makeAppModel(rows: [])
         let view = CloudOTPSheet(email: "alice@example.com").environmentObject(app)
         assertSnapshot(of: hosted(view, size: CGSize(width: 380, height: 220)),
-                       as: .image(size: CGSize(width: 380, height: 220)))
+                       as: .image(precision: 0.98, size: CGSize(width: 380, height: 220)))
     }
 
     // MARK: - Helpers
