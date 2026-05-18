@@ -67,7 +67,7 @@ def register(state: SidecarState) -> Dict[str, Handler]:
                     {"task_id": task.task_id, "page": page, "total": total},
                 )
 
-            convert_file(
+            output_path = convert_file(
                 extractor,
                 task.file,
                 task.output,
@@ -79,10 +79,13 @@ def register(state: SidecarState) -> Dict[str, Handler]:
                 page_callback=_on_page,
             )
             duration_ms = int((time.monotonic() - started) * 1000)
-            state.emit(
-                "convert.finished",
-                {"task_id": task.task_id, "duration_ms": duration_ms},
-            )
+            payload: Dict[str, Any] = {
+                "task_id": task.task_id,
+                "duration_ms": duration_ms,
+            }
+            if output_path:
+                payload["output_path"] = output_path
+            state.emit("convert.finished", payload)
             task.status = "done"
         except InputNotChangedError:
             state.emit(

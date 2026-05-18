@@ -250,6 +250,25 @@ extension AppModel: SidecarManagerDelegate {
                     let file = inputFileName(forTaskID: notification.params["task_id"] as? String)
                     Notifier.notify(title: "SuperMD: converted", body: file)
                 }
+                if settings.output.openInObsidianAfter,
+                   settings.output.mode == .vault || settings.output.mode == .headless,
+                   let vaultID = settings.output.selectedVaultID,
+                   let outputPath = notification.params["output_path"] as? String,
+                   let vaultRoot = settings.output.selectedVaultPath {
+                    // obsidian.open_note expects a path relative to the vault.
+                    let rel = (outputPath as NSString).abbreviatingWithTildeInPath
+                    let vaultURL = URL(fileURLWithPath: (vaultRoot as NSString).expandingTildeInPath)
+                    let outURL = URL(fileURLWithPath: outputPath)
+                    let relPath: String
+                    if outURL.path.hasPrefix(vaultURL.path) {
+                        relPath = String(outURL.path.dropFirst(vaultURL.path.count + 1))
+                    } else {
+                        relPath = rel
+                    }
+                    Task {
+                        try? await sidecar.client.openNote(vault: vaultID, file: relPath)
+                    }
+                }
             case "convert.skipped":
                 queue.handleSkipped(notification.params)
             case "convert.failed":

@@ -117,7 +117,7 @@ def generate_output(
     template,
     metadata_manager: MetadataManager,
     input_hash: str,
-) -> None:
+) -> str:
     jinja_markdown = template.render(context)
 
     for image in context.get("images", []):
@@ -180,6 +180,7 @@ def generate_output(
 
     msg = f"Generated: {output_path_and_file}{note_ctime}"
     console.log(msg, fg="green")
+    return output_path_and_file
 
 
 def verify_metadata_file(
@@ -237,7 +238,7 @@ def convert_file(
     cooldown: float = 0.0,
     _cooldown_state: CooldownState | None = None,
     page_callback=None,
-) -> None:
+) -> str | None:
     console.debug(f"convert_file: {shorten_path(file_name)}")
     
     if progress_bar:
@@ -320,12 +321,12 @@ def convert_file(
                 cooldown_state=cooldown_state,
             )
 
-            generate_output(
-                pngs, 
-                config, 
-                context, 
-                file_name, 
-                output, 
+            return generate_output(
+                pngs,
+                config,
+                context,
+                file_name,
+                output,
                 template,
                 metadata_manager,
                 input_hash
