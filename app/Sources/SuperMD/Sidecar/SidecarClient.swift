@@ -121,6 +121,10 @@ final class SidecarClient {
         return (r["task_id"] as? String) ?? ""
     }
 
+    func convertCancel(taskID: String) async throws {
+        _ = try await call("convert.cancel", params: ["task_id": taskID])
+    }
+
     func convertDirectory(input: String, output: String, model: String? = nil,
                           force: Bool = false, config: [String: Any] = [:]) async throws -> [String] {
         var params: [String: Any] = ["input": input, "output": output, "force": force, "config": config]

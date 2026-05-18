@@ -18,6 +18,10 @@ from supermd_sidecar.state import ConversionTask, SidecarState
 log = logging.getLogger(__name__)
 
 
+class _Cancelled(Exception):
+    """Raised from the page callback to abort an in-flight conversion."""
+
+
 def _build_engine_config(overrides: Dict[str, Any]):
     """Build a SuperMDConfig from a dict the host sent. Falls back to engine
     defaults for any unset field."""
@@ -56,6 +60,8 @@ def register(state: SidecarState) -> Dict[str, Handler]:
         manager = MetadataManager(task.output)
         try:
             def _on_page(page: int, total: int) -> None:
+                if task.cancel_event.is_set():
+                    raise _Cancelled()
                 state.emit(
                     "convert.page",
                     {"task_id": task.task_id, "page": page, "total": total},
@@ -84,6 +90,12 @@ def register(state: SidecarState) -> Dict[str, Handler]:
                 {"task_id": task.task_id, "reason": "input_unchanged"},
             )
             task.status = "done"
+        except _Cancelled:
+            state.emit(
+                "convert.failed",
+                {"task_id": task.task_id, "error": "cancelled"},
+            )
+            task.status = "cancelled"
         except OutputChangedError as e:
             state.emit(
                 "convert.skipped",

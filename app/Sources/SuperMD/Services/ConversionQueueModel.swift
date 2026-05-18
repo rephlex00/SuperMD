@@ -74,6 +74,29 @@ final class ConversionQueueModel: ObservableObject {
         }
     }
 
+    func cancelSelected() {
+        for id in selection {
+            cancel(rowID: id)
+        }
+    }
+
+    func cancel(rowID: JobRow.ID) {
+        guard let i = rows.firstIndex(where: { $0.id == rowID }) else { return }
+        let taskID = rows[i].sidecarTaskID
+        // Queued (not yet dispatched) rows are pure-local cancellations.
+        if rows[i].status == .queued, taskID == nil {
+            rows.remove(at: i)
+            return
+        }
+        // In-flight: ask the sidecar to stop, then mark failed.
+        if let taskID {
+            Task { try? await AppModel.shared!.sidecar.client.convertCancel(taskID: taskID) }
+        }
+        rows[i].status = .failed
+        rows[i].error = "Cancelled"
+        rows[i].finishedAt = Date()
+    }
+
     func reprocessSelected() {
         for id in selection {
             guard let row = rows.first(where: { $0.id == id }) else { continue }

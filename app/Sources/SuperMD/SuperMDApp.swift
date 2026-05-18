@@ -21,12 +21,18 @@ struct SuperMDApp: App {
                     appModel.forceReprocessSelection()
                 }
                 .keyboardShortcut("r", modifiers: [.command, .shift])
+                .disabled(appModel.queue.selection.isEmpty)
             }
             CommandMenu("Conversion") {
                 Button(appModel.queue.isPaused ? "Resume" : "Pause") {
                     appModel.queue.togglePause()
                 }
                 .keyboardShortcut(" ", modifiers: [])
+                Button("Cancel Selected") {
+                    appModel.queue.cancelSelected()
+                }
+                .keyboardShortcut(".", modifiers: [.command])
+                .disabled(appModel.queue.selection.isEmpty)
                 Divider()
                 Button("Open Inbox in Finder") { appModel.revealInbox() }
                 Button("Open Output in Finder") { appModel.revealOutput() }
