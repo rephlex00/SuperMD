@@ -316,6 +316,9 @@ struct CloudSettingsTab: View {
 
     private func signOut() {
         Task {
+            // Stop the active sync task first so the sidecar doesn't keep
+            // polling against a dead token.
+            await app.stopCloudSync()
             try? await app.sidecar.client.cloudLogout()
             app.settings.input.cloudEmail = nil
             app.settings.input.cloudToken = nil
