@@ -458,10 +458,18 @@ struct TemplateSettingsTab: View {
     var body: some View {
         Form {
             Section {
-                TextField("Folder template", text: $app.settings.templates.pathTemplate)
-                TextField("Filename template", text: $app.settings.templates.filenameTemplate)
+                HStack {
+                    TextField("Folder template", text: $app.settings.templates.pathTemplate)
+                    TokenInsertMenu(fallback: $app.settings.templates.pathTemplate,
+                                    catalog: .pathTokens)
+                }
+                HStack {
+                    TextField("Filename template", text: $app.settings.templates.filenameTemplate)
+                    TokenInsertMenu(fallback: $app.settings.templates.filenameTemplate,
+                                    catalog: .pathTokens)
+                }
             } header: { Text("Output paths") } footer: {
-                Text("Tokens: {{file_basename}}, {{title}}, {{DATE:YYYY/MM-DD}}, {{year}}, {{month}}, {{day}}. Title only resolves if \"Generate a short title\" is on.")
+                Text("Use the curly-braces menu to insert tokens. Title only resolves if \"Generate a short title\" is on.")
                     .font(.caption).foregroundStyle(.secondary)
             }
 
@@ -475,11 +483,122 @@ struct TemplateSettingsTab: View {
                     app.settings.templates.pageInstruction = TemplateSettings().pageInstruction
                 }
             } header: { Text("Per-page LLM instruction") } footer: {
-                Text("Sent to the model with every page image. Lean on this to control style (Markdown flavor, math syntax, wiki-links, etc.).")
+                Text("Sent to the model with every page image. Tokens don't apply here — this is a prompt, not a Jinja template.")
                     .font(.caption).foregroundStyle(.secondary)
             }
         }
         .formStyle(.grouped)
+    }
+}
+
+// MARK: - Token catalog + picker
+
+/// One inserttable token plus a one-line description.
+struct TemplateToken: Identifiable, Hashable {
+    let id: String  // == token string
+    let description: String
+    init(_ token: String, _ description: String) {
+        self.id = token; self.description = description
+    }
+}
+
+struct TokenGroup: Identifiable {
+    let id: String  // name
+    let tokens: [TemplateToken]
+    init(_ name: String, _ tokens: [TemplateToken]) {
+        self.id = name; self.tokens = tokens
+    }
+}
+
+struct TokenCatalog {
+    let groups: [TokenGroup]
+
+    /// Tokens that make sense in folder/filename paths. Path templates can
+    /// resolve to nested directories ("YYYY/MM" etc.) so we surface the
+    /// composite DATE forms here too.
+    static let pathTokens = TokenCatalog(groups: [
+        TokenGroup("File", [
+            TemplateToken("{{file_basename}}", "Input filename without extension"),
+            TemplateToken("{{title}}", "Generated note title (requires \"Generate a short title\")"),
+        ]),
+        TokenGroup("Date", dateTokens),
+    ])
+
+    /// Tokens that make sense inside a note's body / frontmatter.
+    static let bodyTokens = TokenCatalog(groups: [
+        TokenGroup("Body", [
+            TemplateToken("{{llm_output}}", "Full LLM transcription — required, or your note will be empty"),
+            TemplateToken("{{title}}", "Generated note title"),
+            TemplateToken("{{file_basename}}", "Source filename"),
+        ]),
+        TokenGroup("Date", dateTokens),
+        TokenGroup("Supernote metadata", [
+            TemplateToken("{{links}}", "List of links the notebook has — for Jinja iteration"),
+            TemplateToken("{{keywords}}", "Bookmarks / keyword markers from the device"),
+            TemplateToken("{{titles}}", "Per-page titles parsed off the original note"),
+            TemplateToken("{{images}}", "List of attached page images"),
+        ]),
+    ])
+
+    private static let dateTokens: [TemplateToken] = [
+        TemplateToken("{{DATE:YYYY-MM-DD}}", "Creation date, ISO — 2026-05-18"),
+        TemplateToken("{{DATE:YYYY}}", "4-digit year — 2026"),
+        TemplateToken("{{DATE:MM}}", "2-digit month — 05"),
+        TemplateToken("{{DATE:MMM}}", "Short month — May"),
+        TemplateToken("{{DATE:MMMM}}", "Full month name — May"),
+        TemplateToken("{{DATE:DD}}", "2-digit day — 18"),
+        TemplateToken("{{DATE:dddd}}", "Day of week — Monday"),
+        TemplateToken("{{DATE:YYYY/MM MMM}}", "Year / month folder — 2026/05 May"),
+    ]
+}
+
+/// Menu that inserts a template token at the focused text view's cursor, or
+/// appends to the supplied binding when no field is focused.
+struct TokenInsertMenu: View {
+    @Binding var fallback: String
+    let catalog: TokenCatalog
+    var multiline: Bool = false
+
+    var body: some View {
+        Menu {
+            ForEach(catalog.groups) { group in
+                Section(group.id) {
+                    ForEach(group.tokens) { tok in
+                        Button {
+                            insert(tok.id)
+                        } label: {
+                            // Two-line: token in monospaced, description below.
+                            VStack(alignment: .leading) {
+                                Text(tok.id).font(.system(.body, design: .monospaced))
+                                Text(tok.description)
+                                    .font(.caption).foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                }
+            }
+        } label: {
+            Image(systemName: "curlybraces")
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .help("Insert a template token")
+    }
+
+    private func insert(_ token: String) {
+        // Try the cursor route: SwiftUI TextField / TextEditor are backed by
+        // an NSTextView field editor, which is the firstResponder while the
+        // field has keyboard focus. Menus don't steal first-responder, so
+        // this works while the picker is open.
+        if let tv = NSApp.keyWindow?.firstResponder as? NSTextView {
+            tv.insertText(token, replacementRange: tv.selectedRange())
+            return
+        }
+        if multiline, !fallback.isEmpty, !fallback.hasSuffix("\n") {
+            fallback += "\n"
+        }
+        fallback += token
     }
 }
 
@@ -514,8 +633,13 @@ private struct BodyTemplateSection: View {
                 TextEditor(text: $app.settings.templates.bodyTemplate)
                     .font(.system(.body, design: .monospaced))
                     .frame(minHeight: 140)
-                Button("Reset to default") {
-                    app.settings.templates.bodyTemplate = TemplateSettings().bodyTemplate
+                HStack {
+                    TokenInsertMenu(fallback: $app.settings.templates.bodyTemplate,
+                                    catalog: .bodyTokens, multiline: true)
+                    Spacer()
+                    Button("Reset to default") {
+                        app.settings.templates.bodyTemplate = TemplateSettings().bodyTemplate
+                    }
                 }
             case .file:
                 HStack {
@@ -532,6 +656,9 @@ private struct BodyTemplateSection: View {
                     .frame(minHeight: 140)
                     .disabled(app.settings.templates.bodyTemplateFilePath == nil)
                 HStack {
+                    TokenInsertMenu(fallback: $fileContents,
+                                    catalog: .bodyTokens, multiline: true)
+                        .disabled(app.settings.templates.bodyTemplateFilePath == nil)
                     Button("Reload from file") { loadFromFile() }
                         .disabled(app.settings.templates.bodyTemplateFilePath == nil)
                     Spacer()
