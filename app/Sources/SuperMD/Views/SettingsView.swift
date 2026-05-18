@@ -425,33 +425,10 @@ struct OutputSettingsTab: View {
     }
 }
 
-private struct FolderMappingEditor: View {
-    @EnvironmentObject var app: AppModel
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            ForEach($app.settings.output.perFolderMappings) { $m in
-                HStack {
-                    TextField("Source prefix", text: $m.sourcePrefix)
-                    Image(systemName: "arrow.right")
-                    TextField("Destination template", text: $m.destination)
-                    Button(role: .destructive) {
-                        app.settings.output.perFolderMappings.removeAll { $0.id == m.id }
-                    } label: { Image(systemName: "minus.circle") }
-                    .buttonStyle(.borderless)
-                }
-            }
-            Button {
-                app.settings.output.perFolderMappings.append(
-                    FolderMapping(sourcePrefix: "", destination: "")
-                )
-            } label: {
-                Label("Add mapping", systemImage: "plus")
-            }
-            .buttonStyle(.borderless)
-        }
-    }
-}
+// FolderMappingEditor was removed when per-folder mappings became unwired.
+// The underlying FolderMapping struct + perFolderMappings field stay in
+// AppSettings so old UserDefaults blobs decode cleanly; they're a no-op
+// until the engine learns to honor per-input output overrides.
 
 // MARK: - Templates
 
