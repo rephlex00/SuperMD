@@ -237,6 +237,16 @@ final class AppModel: ObservableObject {
 // MARK: - SidecarManagerDelegate
 
 extension AppModel: SidecarManagerDelegate {
+    nonisolated func sidecarDidExit(_ manager: SidecarManager, status: Int32) {
+        Task { @MainActor in
+            sidecarStatus = .failed("Sidecar exited (rc=\(status))")
+            for i in queue.rows.indices where queue.rows[i].status == .queued || queue.rows[i].status == .running {
+                queue.rows[i].status = .failed
+                queue.rows[i].error = "Sidecar exited"
+            }
+        }
+    }
+
     nonisolated func sidecar(_ manager: SidecarManager, didEmit notification: SidecarNotification) {
         Task { @MainActor in
             switch notification.method {

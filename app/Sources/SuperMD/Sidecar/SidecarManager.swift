@@ -65,6 +65,12 @@ final class SidecarManager {
         let exe = process.executableURL?.path ?? "<nil>"
         let args = (process.arguments ?? []).joined(separator: " ")
         FileHandle.standardError.write(Data("[SidecarManager] launching: \(exe) \(args)\n".utf8))
+        process.terminationHandler = { [weak self] proc in
+            FileHandle.standardError.write(Data(
+                "[SidecarManager] process exited rc=\(proc.terminationStatus) reason=\(proc.terminationReason.rawValue)\n".utf8))
+            self?.handleProcessExit(status: proc.terminationStatus)
+        }
+
         try process.run()
         FileHandle.standardError.write(Data("[SidecarManager] process.run() ok, pid=\(process.processIdentifier)\n".utf8))
 
@@ -87,6 +93,20 @@ final class SidecarManager {
             FileHandle.standardError.write(data)
             _ = s
         }
+    }
+
+    private func handleProcessExit(status: Int32) {
+        // Reject every pending RPC so the UI doesn't spin forever.
+        pendingLock.lock()
+        let conts = pending
+        pending.removeAll()
+        pendingLock.unlock()
+        for (_, cont) in conts {
+            cont.resume(throwing: SidecarError.notRunning)
+        }
+        // Forget the pipes; further sends will fail with notRunning.
+        self.stdin = nil
+        delegate?.sidecarDidExit(self, status: status)
     }
 
     func shutdown() {
@@ -196,6 +216,11 @@ final class SidecarManager {
 
 protocol SidecarManagerDelegate: AnyObject {
     func sidecar(_ manager: SidecarManager, didEmit notification: SidecarNotification)
+    func sidecarDidExit(_ manager: SidecarManager, status: Int32)
+}
+
+extension SidecarManagerDelegate {
+    func sidecarDidExit(_ manager: SidecarManager, status: Int32) {}
 }
 
 struct SidecarNotification {
