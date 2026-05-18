@@ -46,6 +46,17 @@ final class ConversionQueueModel: ObservableObject {
         }
     }
 
+    func recordUnsupported(input: URL) {
+        var row = JobRow(
+            input: input,
+            output: URL(fileURLWithPath: "/"),
+            status: .failed,
+            startedAt: Date()
+        )
+        row.error = "Unsupported file type — only .note / .spd / .pdf / .png"
+        rows.append(row)
+    }
+
     func togglePause() { isPaused.toggle() }
 
     func reprocessSelected() {

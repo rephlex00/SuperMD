@@ -65,10 +65,17 @@ final class AppModel: ObservableObject {
             .sink { $0.save() }
             .store(in: &cancellables)
 
-        // Start watcher if configured.
-        if settings.input.watchInbox, let url = settings.input.inboxURL {
-            InboxWatcher.shared.start(at: url) { [weak self] urls in
-                self?.handleDroppedFiles(urls)
+        // Start watcher if configured. Pushed off main because the first
+        // createDirectory(~/Documents/...) can trigger a Documents-folder
+        // permission prompt that synchronously blocks the main thread —
+        // which means the main window never appears until the user clicks
+        // Allow on an invisible dialog.
+        let suppressWatcher = ProcessInfo.processInfo.environment["SUPERMD_TEST_NO_INBOX"] != nil
+        if settings.input.watchInbox, !suppressWatcher, let url = settings.input.inboxURL {
+            DispatchQueue.global(qos: .utility).async { [weak self] in
+                InboxWatcher.shared.start(at: url) { urls in
+                    Task { @MainActor in self?.handleDroppedFiles(urls) }
+                }
             }
         }
 
@@ -116,7 +123,10 @@ final class AppModel: ObservableObject {
             FileHandle.standardError.write(Data(
                 "[handleDroppedFiles] url=\(url.path) resolved=\(resolved.path) ext=\(resolved.pathExtension) supported=\(supported)\n".utf8
             ))
-            guard supported else { continue }
+            if !supported {
+                queue.recordUnsupported(input: resolved)
+                continue
+            }
             queue.enqueue(input: resolved, output: settings.output.resolvedRoot)
         }
     }
