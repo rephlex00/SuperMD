@@ -147,6 +147,13 @@ final class AppModel: ObservableObject {
         queue.reprocessSelected()
     }
 
+    fileprivate func inputFileName(forTaskID taskID: String?) -> String {
+        guard let taskID,
+              let row = queue.rows.first(where: { $0.sidecarTaskID == taskID })
+        else { return "(unknown)" }
+        return row.input.lastPathComponent
+    }
+
     // MARK: - Initial probe
 
     private func initialProbe() async {
@@ -207,10 +214,20 @@ extension AppModel: SidecarManagerDelegate {
                 queue.handlePage(notification.params)
             case "convert.finished":
                 queue.handleFinished(notification.params)
+                if settings.advanced.notificationsOnSuccess {
+                    let file = inputFileName(forTaskID: notification.params["task_id"] as? String)
+                    Notifier.notify(title: "SuperMD: converted", body: file)
+                }
             case "convert.skipped":
                 queue.handleSkipped(notification.params)
             case "convert.failed":
                 queue.handleFailed(notification.params)
+                if settings.advanced.notificationsOnFailure,
+                   (notification.params["error"] as? String) != "cancelled" {
+                    let file = inputFileName(forTaskID: notification.params["task_id"] as? String)
+                    let err = notification.params["error"] as? String ?? "unknown error"
+                    Notifier.notify(title: "SuperMD: failed — \(file)", body: err)
+                }
             case "cloud.otp_required":
                 pendingOTP = PendingOTP(email: notification.params["email"] as? String ?? "")
             case "cloud.token_refreshed":
