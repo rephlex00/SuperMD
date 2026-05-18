@@ -9,7 +9,17 @@ final class ConversionQueueModel: ObservableObject {
     @Published var isPaused: Bool = false
 
     func enqueue(input: URL, output: URL?) {
-        guard let output else { return }
+        guard let output else {
+            var row = JobRow(
+                input: input,
+                output: URL(fileURLWithPath: "/"),
+                status: .failed,
+                startedAt: Date()
+            )
+            row.error = "No output folder configured — open Settings → Output"
+            rows.append(row)
+            return
+        }
         let row = JobRow(
             input: input,
             output: output,

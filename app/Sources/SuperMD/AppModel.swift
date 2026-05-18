@@ -28,17 +28,35 @@ final class AppModel: ObservableObject {
         AppModel.shared = self
     }
 
+    private var didStart = false
+
     func start() {
+        FileHandle.standardError.write(Data("[AppModel] start() called (didStart=\(didStart))\n".utf8))
+        if didStart { return }
+        didStart = true
         sidecar.delegate = self
         do {
             try sidecar.start()
+            FileHandle.standardError.write(Data("[AppModel] sidecar.start() returned cleanly\n".utf8))
             sidecarStatus = .running
         } catch {
+            let msg = "[AppModel] sidecar.start() threw: \(error)\n"
+            FileHandle.standardError.write(Data(msg.utf8))
             sidecarStatus = .failed(error.localizedDescription)
             return
         }
 
         Task { await initialProbe() }
+
+        // Forward nested ObservableObjects' change events to ours so SwiftUI
+        // views observing AppModel re-render when queue.rows / settings.output
+        // / etc. mutate.
+        queue.objectWillChange
+            .sink { [weak self] in self?.objectWillChange.send() }
+            .store(in: &cancellables)
+        settings.objectWillChange
+            .sink { [weak self] in self?.objectWillChange.send() }
+            .store(in: &cancellables)
 
         // Persist any setting change.
         $settings
@@ -58,6 +76,26 @@ final class AppModel: ObservableObject {
         if settings.input.cloudSyncEnabled, let token = settings.input.cloudToken {
             Task { await reauthenticateCloud(token: token) }
         }
+
+        // Test hook: SUPERMD_TEST_OUTPUT="/path" overrides output settings
+        // for headless drop tests.
+        if let outPath = ProcessInfo.processInfo.environment["SUPERMD_TEST_OUTPUT"], !outPath.isEmpty {
+            settings.output.mode = .folder
+            settings.output.genericOutputPath = outPath
+            FileHandle.standardError.write(Data("[AppModel] TEST_OUTPUT override: \(outPath)\n".utf8))
+        }
+
+        // Test hook: SUPERMD_TEST_DROP="/path/a.note,/path/b.note" injects a
+        // synthetic drop ~2s after launch so automated tests don't need
+        // synthetic mouse events.
+        if let dropList = ProcessInfo.processInfo.environment["SUPERMD_TEST_DROP"], !dropList.isEmpty {
+            let urls = dropList.split(separator: ",").map { URL(fileURLWithPath: String($0)) }
+            FileHandle.standardError.write(Data("[AppModel] TEST_DROP scheduling \(urls.count) urls\n".utf8))
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 2_000_000_000)
+                self.handleDroppedFiles(urls)
+            }
+        }
     }
 
     var menuBarSymbol: String {
@@ -72,8 +110,14 @@ final class AppModel: ObservableObject {
     // MARK: - Drop / convert
 
     func handleDroppedFiles(_ urls: [URL]) {
-        for url in urls where SuperMDFile.isSupported(url) {
-            queue.enqueue(input: url, output: settings.output.resolvedRoot)
+        for url in urls {
+            let resolved = url.resolvingSymlinksInPath()
+            let supported = SuperMDFile.isSupported(resolved)
+            FileHandle.standardError.write(Data(
+                "[handleDroppedFiles] url=\(url.path) resolved=\(resolved.path) ext=\(resolved.pathExtension) supported=\(supported)\n".utf8
+            ))
+            guard supported else { continue }
+            queue.enqueue(input: resolved, output: settings.output.resolvedRoot)
         }
     }
 

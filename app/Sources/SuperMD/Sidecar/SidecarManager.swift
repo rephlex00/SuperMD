@@ -28,6 +28,7 @@ final class SidecarManager {
     }
 
     func start() throws {
+        FileHandle.standardError.write(Data("[SidecarManager] start() entry\n".utf8))
         let process = Process()
         let stdin = Pipe()
         let stdout = Pipe()
@@ -57,10 +58,15 @@ final class SidecarManager {
                 repoRoot.appendingPathComponent("src").path,
                 env["PYTHONPATH"] ?? "",
             ].joined(separator: ":")
+            env["PYTHONUNBUFFERED"] = "1"
             process.environment = env
         }
 
+        let exe = process.executableURL?.path ?? "<nil>"
+        let args = (process.arguments ?? []).joined(separator: " ")
+        FileHandle.standardError.write(Data("[SidecarManager] launching: \(exe) \(args)\n".utf8))
         try process.run()
+        FileHandle.standardError.write(Data("[SidecarManager] process.run() ok, pid=\(process.processIdentifier)\n".utf8))
 
         self.process = process
         self.stdin = stdin.fileHandleForWriting
@@ -114,10 +120,13 @@ final class SidecarManager {
 
             writeQueue.async {
                 do {
+                    guard let stdin = self.stdin else {
+                        throw SidecarError.notRunning
+                    }
                     let data = try JSONSerialization.data(withJSONObject: payload)
                     var line = data
                     line.append(0x0A)  // '\n'
-                    try self.stdin?.write(contentsOf: line)
+                    try stdin.write(contentsOf: line)
                 } catch {
                     self.pendingLock.lock()
                     let cont = self.pending.removeValue(forKey: id)
@@ -164,16 +173,22 @@ final class SidecarManager {
         // identifies the project root: either `app/Package.swift` (running
         // from a bundled .app or copy outside the build tree) or `Package.swift`
         // alongside an `Sources/SuperMD/` (running from inside `app/.build/`).
-        var dir = URL(fileURLWithPath: CommandLine.arguments[0]).deletingLastPathComponent()
-        for _ in 0..<10 {
-            if fm.fileExists(atPath: dir.appendingPathComponent("app/Package.swift").path) {
-                return dir
+        let seeds = [
+            URL(fileURLWithPath: CommandLine.arguments[0]).deletingLastPathComponent(),
+            URL(fileURLWithPath: fm.currentDirectoryPath),
+        ]
+        for seed in seeds {
+            var dir = seed
+            for _ in 0..<10 {
+                if fm.fileExists(atPath: dir.appendingPathComponent("app/Package.swift").path) {
+                    return dir
+                }
+                if fm.fileExists(atPath: dir.appendingPathComponent("Package.swift").path)
+                    && fm.fileExists(atPath: dir.appendingPathComponent("Sources/SuperMD").path) {
+                    return dir.deletingLastPathComponent()
+                }
+                dir.deleteLastPathComponent()
             }
-            if fm.fileExists(atPath: dir.appendingPathComponent("Package.swift").path)
-                && fm.fileExists(atPath: dir.appendingPathComponent("Sources/SuperMD").path) {
-                return dir.deletingLastPathComponent()
-            }
-            dir.deleteLastPathComponent()
         }
         return URL(fileURLWithPath: fm.currentDirectoryPath)
     }

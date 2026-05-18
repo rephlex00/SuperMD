@@ -4,6 +4,9 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+# Tell the app where the repo lives — its argv[0]-based fallback walk doesn't
+# always survive `swift run`'s argv shape.
+export SUPERMD_REPO_ROOT="$ROOT"
 cd "$ROOT/app"
 
 # Ensure deps are installed in the user's Python env so the sidecar runs

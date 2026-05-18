@@ -24,16 +24,28 @@ struct ContentView: View {
     }
 
     private func handleDrop(providers: [NSItemProvider]) -> Bool {
+        FileHandle.standardError.write(Data("[Drop] received \(providers.count) providers\n".utf8))
+        let lock = NSLock()
         var urls: [URL] = []
         let group = DispatchGroup()
         for p in providers {
             group.enter()
-            _ = p.loadObject(ofClass: URL.self) { url, _ in
-                if let url { urls.append(url) }
-                group.leave()
+            _ = p.loadDataRepresentation(forTypeIdentifier: UTType.fileURL.identifier) { data, error in
+                defer { group.leave() }
+                if let error {
+                    FileHandle.standardError.write(Data("[Drop] load error: \(error)\n".utf8))
+                    return
+                }
+                guard let data,
+                      let url = URL(dataRepresentation: data, relativeTo: nil, isAbsolute: true) else {
+                    FileHandle.standardError.write(Data("[Drop] no URL from data (\(data?.count ?? 0) bytes)\n".utf8))
+                    return
+                }
+                lock.lock(); urls.append(url); lock.unlock()
             }
         }
         group.notify(queue: .main) {
+            FileHandle.standardError.write(Data("[Drop] dispatching \(urls.count) urls to handleDroppedFiles\n".utf8))
             app.handleDroppedFiles(urls)
         }
         return true
@@ -55,9 +67,10 @@ private struct HeaderBar: View {
                 Image(systemName: app.queue.isPaused ? "play.fill" : "pause.fill")
             }
             .help(app.queue.isPaused ? "Resume" : "Pause")
-            Button(action: { NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil) }) {
+            SettingsLink {
                 Image(systemName: "gearshape")
             }
+            .buttonStyle(.borderless)
             .help("Settings")
         }
         .padding(.horizontal, 14)
