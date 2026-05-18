@@ -24,8 +24,16 @@
     <true/>
     <key>LSUIElement</key>
     <false/>
+    <key>LSApplicationCategoryType</key>
+    <string>public.app-category.productivity</string>
     <key>NSAppleEventsUsageDescription</key>
     <string>SuperMD opens generated notes in Obsidian.</string>
+    <key>NSDocumentsFolderUsageDescription</key>
+    <string>SuperMD watches a folder under Documents (default ~/Documents/Supernote Inbox) and auto-converts any Supernote / PDF / PNG files saved there.</string>
+    <key>NSDesktopFolderUsageDescription</key>
+    <string>SuperMD only reads files you drop on it or save into your Inbox folder. Access to Desktop is requested only if you pick a Desktop path as your Inbox or output.</string>
+    <key>NSDownloadsFolderUsageDescription</key>
+    <string>Same as Documents — SuperMD only reads files you point it at (e.g. an AirDrop landing zone in Downloads).</string>
     <key>CFBundleDocumentTypes</key>
     <array>
         <dict>
