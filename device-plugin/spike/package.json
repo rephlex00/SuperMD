@@ -1,0 +1,27 @@
+{
+  "name": "supermd-spike",
+  "version": "0.0.1",
+  "description": "Capability-validation spike plugin for porting SuperMD onto the Supernote device. Throwaway: answers SDK capability questions on real hardware before the full port.",
+  "private": true,
+  "main": "index.js",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "start": "react-native start",
+    "build": "react-native-builder-bob build"
+  },
+  "dependencies": {
+    "i18next": "^24.0.2",
+    "react": "^19.0.0",
+    "react-native": "^0.79.2",
+    "react-native-fs": "^2.20.0",
+    "react-native-keychain": "^9.2.0",
+    "react-native-network-info": "^5.2.1",
+    "react-native-tcp-socket": "^6.2.0",
+    "sn-plugin-lib": "^0.1.43"
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.0",
+    "react-native-builder-bob": "^0.30.0",
+    "typescript": "^5.0.4"
+  }
+}

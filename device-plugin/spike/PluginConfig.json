@@ -1,0 +1,10 @@
+{
+  "id": "com.supermd.spike",
+  "name": "SuperMD Spike",
+  "version": "0.0.1",
+  "description": "Capability-validation spike for the SuperMD on-device port. Runs 8 probes and writes results to supermd-spike.log.",
+  "author": "SuperMD",
+  "main": "index.js",
+  "icon": "icon.png",
+  "minSupernoteVersion": "0.0.0"
+}

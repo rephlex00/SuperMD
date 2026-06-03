@@ -1,0 +1,18 @@
+# Node / React Native
+node_modules/
+*.log
+
+# Metro / RN build output
+.metro-health-check*
+**/lib/
+**/dist/
+**/build/
+
+# Android/iOS native build artifacts (if generated later)
+**/android/build/
+**/android/.gradle/
+**/ios/Pods/
+**/*.snplg
+
+# OS / editor
+.DS_Store
