@@ -49,7 +49,8 @@ Other load-bearing SDK surface (all return an `APIResponse`-shaped object
 3. Writing to the actual Obsidian vault path under Android scoped storage (P4).
 4. `react-native-keychain` is device-local and not synced into the plugin dir (P7).
 5. `react-native-tcp-socket` can bind a port for the onboarding server (P6).
-6. `event_pen_up` fires, and a polling scan is cheap enough as a fallback (P5).
+6. *(future, non-gating)* `event_pen_up` fires / polling-scan cost (P5) — only relevant to
+   the optional Phase 4 auto-trigger; the initial scope is fully manual.
 
 ## Phase 0 — Spike (in `device-plugin/spike/`, done)
 
@@ -72,18 +73,37 @@ Module-by-module mapping, **revised for the native rasterizer**:
 | Jinja2 template + `date_utils.py` | `pipeline/template.ts` | `nunjucks` + a `{{DATE:...}}` regex pre-pass | Medium |
 | `config.py` | `config/schema.ts` + `defaults.ts` | `zod`; keep default prompt/template constants | Low |
 | `metadata_db.py` | `store/metadata.ts` | JSON file in `<vault>/.meta/` via RNFS; SHA-1 (or size+mtime) for skip/protect; `ignoresnlock` opt-out | Medium |
-| `watcher.py` | `trigger/poller.ts` | foreground mtime scan + debounce; OR pen-up debounce (below) | Medium |
+| *(new)* durable conversion queue | `store/queue.ts` + `pipeline/runner.ts` | persistent JSON queue; all-or-nothing per note; auto-retry w/ backoff + manual retry/remove; drains on next runtime when online | Medium |
+| `watcher.py` (auto-trigger) | *(deferred — not in initial scope)* | optional later: pen-up debounce / foreground polling enqueue into the queue | — |
 | `gui.py` | `onboarding/server.ts` + `www/` | ephemeral `react-native-tcp-socket` HTTP server, on-screen pairing token | Med-High |
 | `importers/pdf.py` (PDF) | optional | `PluginDocAPI.getCurrentDocText` / `generateDocImage` (native) | Low if pursued |
 | `importers/atelier.py`, SVG, `cmds/` | *(dropped on-device)* | — | — |
 
-### Conversion trigger (no save hook exists)
-- **Manual (primary):** register a sidebar button (`registerButton(1, ['NOTE'], ...)`);
-  on click, `saveCurrentNote()` then convert the open note.
-- **Auto (best-effort):** subscribe to `event_pen_up`; debounce (e.g. 30 s of no pen-up)
-  → `saveCurrentNote()` → convert. Works only while the note is open and the plugin active.
-- **Fallback:** foreground mtime polling of the Note tree for notes changed outside the
-  plugin. State plainly: no true background-on-save is possible.
+### Conversion trigger — fully manual + a durable queue (initial scope)
+
+Triggering is **completely manual** in the initial scope. There is no auto-trigger
+(pen-up / polling) — that's deferred (see Phase 4, optional). The user explicitly asks for
+a conversion; the work is then **queued and persisted** so it survives the device being
+offline or the plugin closing, and runs on the next runtime.
+
+- **Manual action:** register a sidebar button (`registerButton(1, ['NOTE'], ...)`) and a
+  list UI. On "Convert", `saveCurrentNote()` (if it's the open note), then **enqueue** the
+  note path — do not block on the LLM.
+- **Durable queue** (`store/queue.ts`): a JSON file in `<vault>/.meta/supermd.queue.json`
+  (durability relies on the writable storage validated by spike P4/P7). Each item:
+  `{ notePath, inputHash, status: 'queued'|'processing'|'failed'|'done', attempts,
+  nextAttemptAt, lastError }`.
+- **Processing model — all-or-nothing per note:** a note's `.md` is written only when
+  **all** pages transcribe successfully. If interrupted (offline mid-note), nothing is
+  written; the item returns to `queued` and is retried **whole** next time. No partial
+  files are ever produced.
+- **Runner lifecycle:** on plugin start (and after each manual trigger), a single-flight
+  runner drains the queue while online — for each item: rasterize → LLM per page →
+  template → write `.md`. On network failure it stops cleanly, leaving items `queued`.
+- **Retry policy — auto + manual:** failed/offline items auto-retry on the next runtime and
+  after an exponential backoff (`nextAttemptAt`). The queue UI shows per-item status and
+  offers **Retry now** and **Remove**. Online-ness is detected by attempting the call
+  (and/or a cheap reachability check); no true background execution is possible.
 
 ### LLM, keys & onboarding
 - LLM via on-device `fetch`. **API key encrypted at rest in `react-native-keychain`**
@@ -106,15 +126,19 @@ the note so it's visible on the e-ink device (gated by spike P8).
   while keeping handwriting legible.
 
 ### Phased delivery
-1. **Phase 1 — single-note manual MVP:** sidebar button → `generateNotePng` per page →
-   `fetch` LLM with rolling context → `nunjucks` template → write `.md`+attachments. Key
-   from keychain (temporary in-app field).
-2. **Phase 2 — batch + skip/protect:** convert-all, metadata store (JSON), hashing,
-   `ignoresnlock`, attachment cleanup; pull titles/keywords/links from the SDK.
+1. **Phase 1 — manual + durable queue MVP:** sidebar button enqueues the note; a runner
+   drains the persistent queue when online — `generateNotePng` per page → `fetch` LLM with
+   rolling context → `nunjucks` template → write `.md`+attachments (all-or-nothing per
+   note). Auto-retry on next runtime + a basic queue/status UI. Key from keychain
+   (temporary in-app field).
+2. **Phase 2 — batch + skip/protect:** convert-all enqueues many notes, metadata store
+   (JSON), hashing, `ignoresnlock`, attachment cleanup; pull titles/keywords/links from
+   the SDK.
 3. **Phase 3 — onboarding web config:** ephemeral HTTP server, port the `gui.py` form,
    key→keychain, config→RNFS JSON.
-4. **Phase 4 — auto-trigger:** pen-up debounce + `saveCurrentNote`, plus foreground polling
-   for externally-changed notes. Optional: write-back into the note via `insertImage`.
+4. **Phase 4 (optional, later) — auto-trigger:** pen-up debounce / foreground polling that
+   simply *enqueues* into the same queue + `saveCurrentNote`. Optional: write-back into the
+   note via `insertImage`. Not part of the initial scope.
 
 ## Spike results (fill in after running on hardware)
 

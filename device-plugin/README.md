@@ -16,7 +16,7 @@ A throwaway plugin that empirically answers what the SDK actually allows on real
 | P2 | Outbound HTTPS `fetch` to an LLM endpoint | **must pass** (existential) |
 | P3 | `PluginFileAPI.generateNotePng` rasterizes a `.note` page natively | **must pass** (removes the decoder-port risk) |
 | P4 | Writing `.md` to the Note tree / vault path | **must pass** |
-| P5 | `event_pen_up` subscription + polling-scan cost (trigger strategy) | informs Phase 4 |
+| P5 | `event_pen_up` subscription + polling-scan cost | future/non-gating (initial scope is fully manual) |
 | P6 | Ephemeral `react-native-tcp-socket` HTTP server (onboarding) | gates Phase 3 |
 | P7 | `react-native-keychain` round-trip, device-local & non-synced | **must pass** |
 | P8 | Native `getTitles`/`getKeyWords` + `insertImage` availability | informational |
