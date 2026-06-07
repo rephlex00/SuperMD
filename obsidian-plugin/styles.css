@@ -1,0 +1,35 @@
+/* SuperMD plugin styles */
+.supermd-note-embed {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: center;
+}
+
+.supermd-note-embed img {
+  max-width: 100%;
+  height: auto;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 4px;
+}
+
+.supermd-note-view {
+  overflow: auto;
+  padding: 12px;
+}
+
+.supermd-note-view img {
+  display: block;
+  max-width: 100%;
+  margin: 0 auto 12px auto;
+}
+
+.supermd-error {
+  color: var(--text-error);
+  font-size: var(--font-ui-small);
+}
+
+.supermd-otp-input {
+  width: 100%;
+  margin: 8px 0;
+}

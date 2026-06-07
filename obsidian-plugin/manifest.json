@@ -1,0 +1,9 @@
+{
+  "id": "supermd",
+  "name": "SuperMD",
+  "version": "0.1.0",
+  "minAppVersion": "1.5.0",
+  "description": "Convert and view Supernote .note files in Obsidian via LLM vision transcription, with Supernote Cloud sync.",
+  "author": "SuperMD",
+  "isDesktopOnly": false
+}

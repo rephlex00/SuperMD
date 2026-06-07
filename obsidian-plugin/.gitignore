@@ -1,0 +1,11 @@
+# Node
+node_modules/
+main.js
+*.js.map
+
+# Build / test
+dist/
+coverage/
+
+# OS
+.DS_Store
